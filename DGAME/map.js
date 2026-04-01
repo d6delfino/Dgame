@@ -1,5 +1,5 @@
 /* ============================================================
-   map.js — Generazione procedurale della mappa e posizionamento entità
+   map.js — Generazione procedurale e Sincronizzazione Tema
    ============================================================ */
 
 function generateProceduralMap() {
@@ -10,27 +10,26 @@ function generateProceduralMap() {
         }
     }
 
-    // 4 posizioni HQ negli angoli della mappa esagonale
     const allHqPositions = [
-        { q: -GRID_RADIUS + 1, r: GRID_RADIUS - 1 },  // angolo basso-sinistra  (P1 Verde)
-        { q: GRID_RADIUS - 1,  r: -GRID_RADIUS + 1 }, // angolo alto-destra     (P2 Viola)
-        { q: GRID_RADIUS - 1,  r: 0 },                // lato destro            (P3 Blu)
-        { q: -GRID_RADIUS + 1, r: 0 }                 // lato sinistro          (P4 Oro)
+        { q: -GRID_RADIUS + 1, r: GRID_RADIUS - 1 }, { q: GRID_RADIUS - 1, r: -GRID_RADIUS + 1 },
+        { q: GRID_RADIUS - 1, r: 0 }, { q: -GRID_RADIUS + 1, r: 0 }
     ];
     const hqPositions = allHqPositions.slice(0, totalPlayers);
+    hqPositions.forEach((pos, i) => { placeEntityAt(createHQ(i + 1), pos.q, pos.r); });
 
-    hqPositions.forEach((pos, i) => {
-        placeEntityAt(createHQ(i + 1), pos.q, pos.r);
-    });
-
+    // GENERAZIONE MURI CON TEMA DINAMICO
     grid.forEach(cell => {
         if (cell.type === 'empty' && !cell.entity) {
             const farFromAll = hqPositions.every(hq => hexDistance(cell, hq) > 2);
             if (farFromAll && Math.random() < 0.18) {
-                cell.type = 'wall'; let randomHp = Math.floor(Math.random() * 6) + 5;
+                cell.type = 'wall';
+                let randomHp = Math.floor(Math.random() * 6) + 5;
                 cell.hp = randomHp; cell.maxHp = randomHp;
                 cell.sprite = getRandomSprite(SPRITE_POOLS.walls);
-                cell.customSpriteId = 'OB' + (Math.floor(Math.random() * 18) + 1);
+                
+                // Selezione sprite basata sul tema corrente
+                const randomId = Math.floor(Math.random() * THEME_WALL_COUNT) + 1;
+                cell.customSpriteId = THEME_WALL_PREFIX + randomId;
             }
         }
     });
@@ -61,21 +60,24 @@ function placePlayerAgents(faction, hqPos) {
 }
 
 function receiveGameState(netState) {
-    // Supporta sia il vecchio formato {p1,p2} sia il nuovo {players:{1:..,2:..,3:..,4:..}}
+    // SINCRONIZZAZIONE TEMA CLIENT
+    if (netState.theme) {
+        applyTheme({
+            id: netState.theme.id,
+            prefix: netState.theme.prefix,
+            count: netState.theme.count,
+            path: 'img/' + netState.theme.path
+        });
+    }
+
     if (netState.players) {
         totalPlayers = netState.totalPlayers || 2;
-        for (let p = 1; p <= totalPlayers; p++) {
-            if (netState.players[p]) players[p] = netState.players[p];
-        }
-    } else {
-        players[1] = netState.p1; players[2] = netState.p2; totalPlayers = 2;
+        for (let p = 1; p <= totalPlayers; p++) { if (netState.players[p]) players[p] = netState.players[p]; }
     }
 
     grid.clear();
     for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
-        for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) {
-            if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
-        }
+        for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) { if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 }); }
     }
 
     netState.walls.forEach(w => {

@@ -396,6 +396,10 @@ function handleClientReceivedData(data) {
         updateSetupUI();
 
     } else if (data.type === 'GAME_STATE') {
+        if (data.state.themeId) {
+        const themeToApply = bgOptions.find(t => t.id === data.state.themeId);
+        if (themeToApply) applyTheme(themeToApply);
+    }
         receiveGameState(data.state);
         startActiveGameUI(data.state.startingPlayer);
 
@@ -558,6 +562,7 @@ function tryHostStart() {
     const gameStateMsg = {
         type: 'GAME_STATE',
         state: { 
+            themeId: SELECTED_BG_ID,
             walls, 
             players: playersSnapshot, 
             totalPlayers: onlineTotalPlayers, 

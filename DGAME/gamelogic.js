@@ -341,7 +341,7 @@ function executeAction(targetCell, fromNetwork = false) {
         targetCell.hp = 2; 
         targetCell.maxHp = 2;
         targetCell.sprite = getRandomSprite(SPRITE_POOLS.barricades); 
-        targetCell.customSpriteId = 'OB1';
+        targetCell.customSpriteId = THEME_BARRICADE_ID; // Prima era 'OB1'
         success = true; 
         actionCost = 2;
     }
