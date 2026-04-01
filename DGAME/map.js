@@ -4,16 +4,54 @@
 
 function generateProceduralMap() {
     grid.clear();
-    for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
-        for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) {
-            if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
+
+    if (totalPlayers >= 3) {
+        // GRIGLIA RETTANGOLARE (quasi quadrata) per 3-4 giocatori.
+        // In coordinate assiali hex "pointy-top", un rettangolo si ottiene
+        // iterando r liberamente e compensando q con floor(r/2).
+        const RQ = GRID_RADIUS;               // semi-larghezza colonne
+        const RR = Math.round(GRID_RADIUS * 0.85); // semi-altezza righe (leggermente ridotta per avvicinarsi al quadrato)
+        for (let r = -RR; r <= RR; r++) {
+            const qOffset = Math.floor(r / 2);
+            for (let q = -RQ - qOffset; q <= RQ - qOffset; q++) {
+                grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
+            }
+        }
+    } else {
+        // GRIGLIA ESAGONALE originale per 2 giocatori
+        for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
+            for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) {
+                if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
+            }
         }
     }
 
-    const allHqPositions = [
-        { q: -GRID_RADIUS + 1, r: GRID_RADIUS - 1 }, { q: GRID_RADIUS - 1, r: -GRID_RADIUS + 1 },
-        { q: GRID_RADIUS - 1, r: 0 }, { q: -GRID_RADIUS + 1, r: 0 }
-    ];
+    // Posizioni HQ adattate alla forma della griglia
+    let allHqPositions;
+    if (totalPlayers >= 3) {
+        const RQ = GRID_RADIUS;
+        const RR = Math.round(GRID_RADIUS * 0.85);
+        // Angoli del rettangolo assiale (con compensazione offset)
+        const tlQ = -RQ - Math.floor(-RR / 2) + 1; // angolo top-left  (r=-RR)
+        const trQ =  RQ - Math.floor(-RR / 2) - 1; // angolo top-right (r=-RR)
+        const blQ = -RQ - Math.floor( RR / 2) + 1; // angolo bot-left  (r=+RR)
+        const brQ =  RQ - Math.floor( RR / 2) - 1; // angolo bot-right (r=+RR)
+        const tR  = -RR + 1;
+        const bR  =  RR - 1;
+        allHqPositions = [
+            { q: blQ, r: bR  },   // P1 Verde   — angolo basso-sinistra
+            { q: trQ, r: tR  },   // P2 Viola   — angolo alto-destra
+            { q: brQ, r: bR  },   // P3 Blu     — angolo basso-destra
+            { q: tlQ, r: tR  },   // P4 Oro     — angolo alto-sinistra
+        ];
+    } else {
+        allHqPositions = [
+            { q: -GRID_RADIUS + 1, r: GRID_RADIUS - 1 },
+            { q:  GRID_RADIUS - 1, r: -GRID_RADIUS + 1 },
+            { q:  GRID_RADIUS - 1, r: 0 },
+            { q: -GRID_RADIUS + 1, r: 0 }
+        ];
+    }
     const hqPositions = allHqPositions.slice(0, totalPlayers);
     hqPositions.forEach((pos, i) => { placeEntityAt(createHQ(i + 1), pos.q, pos.r); });
 
@@ -76,8 +114,21 @@ function receiveGameState(netState) {
     }
 
     grid.clear();
-    for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
-        for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) { if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 }); }
+    if (totalPlayers >= 3) {
+        const RQ = GRID_RADIUS;
+        const RR = Math.round(GRID_RADIUS * 0.85);
+        for (let r = -RR; r <= RR; r++) {
+            const qOffset = Math.floor(r / 2);
+            for (let q = -RQ - qOffset; q <= RQ - qOffset; q++) {
+                grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
+            }
+        }
+    } else {
+        for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
+            for (let r = -GRID_RADIUS; r <= GRID_RADIUS; r++) {
+                if (Math.abs(q + r) <= GRID_RADIUS) grid.set(getKey(q, r), { type: 'empty', q, r, entity: null, hp: 0, maxHp: 0 });
+            }
+        }
     }
 
     netState.walls.forEach(w => {

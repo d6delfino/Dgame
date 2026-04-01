@@ -21,6 +21,9 @@ let onlineTotalPlayers = 2;
 // Buffer per gli agenti inviati dai client PRIMA che l'host avvii il setup
 let clientSetupBuffer = {};
 
+// Fazioni gestite dall'AI nell'online (solo l'host le esegue)
+let onlineAIFactions = new Set();
+
 // ============================================================
 // MENU PRINCIPALE
 // ============================================================
@@ -96,6 +99,7 @@ function initAsHost() {
     isHost = true; 
     isOnline = true; 
     myPlayerNumber = 1;
+    onlineAIFactions = new Set(); // reset fazioni AI ad ogni nuova sessione host
 
     const btnH = document.getElementById('btn-be-host');
     const btnC = document.getElementById('btn-be-client');
@@ -165,6 +169,10 @@ function renderHostPanel() {
                 style="padding:10px 18px; border:2px solid #555; color:#555; background:transparent; cursor:pointer;">4</button>
         </div>
         <div id="host-lobby-status" style="font-size:13px; color:#aaa; margin-bottom:12px; line-height:1.8;"></div>
+        <div id="ai-slots-panel" style="margin-bottom:12px; border-top:1px solid #333; padding-top:10px; display:none;">
+            <p style="color:#888; font-size:11px; margin:0 0 8px 0; text-transform:uppercase;">🤖 Fazioni gestite dall'AI:</p>
+            <div id="ai-slots-buttons" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
         <button class="action-btn" id="btn-start-online" onclick="hostStartGame()" disabled
             style="width:100%; padding:13px; border:2px solid #555; color:#555; background:transparent; cursor:not-allowed;">
             AVVIA PARTITA
@@ -185,7 +193,39 @@ function setOnlinePlayers(n) {
         btn.style.color       = active ? '#00ff88' : '#555';
         btn.style.background  = active ? 'rgba(0,255,136,0.15)' : 'transparent';
     });
+    updateAISlotsUI();
     updateHostLobby();
+}
+
+function updateAISlotsUI() {
+    const panel = document.getElementById('ai-slots-panel');
+    const container = document.getElementById('ai-slots-buttons');
+    if (!panel || !container) return;
+
+    const factionColors = ['','#00ff88','#cc00ff','#00aaff','#FFD700'];
+    const factionNames  = ['','Verde','Viola','Blu','Oro'];
+
+    // Mostra il pannello solo se ci sono slot non-host
+    panel.style.display = onlineTotalPlayers > 1 ? 'block' : 'none';
+    container.innerHTML = '';
+
+    for (let n = 2; n <= onlineTotalPlayers; n++) {
+        const isAI = onlineAIFactions.has(n);
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.style.cssText = `padding:8px 14px; border:2px solid ${factionColors[n]}; 
+            color:${isAI ? '#000' : factionColors[n]}; 
+            background:${isAI ? factionColors[n] : 'transparent'}; 
+            cursor:pointer; font-size:12px;`;
+        btn.innerText = `P${n} ${factionNames[n]}: ${isAI ? '🤖 BOT' : '👤 Umano'}`;
+        btn.onclick = () => {
+            if (onlineAIFactions.has(n)) onlineAIFactions.delete(n);
+            else onlineAIFactions.add(n);
+            updateAISlotsUI();
+            updateHostLobby();
+        };
+        container.appendChild(btn);
+    }
 }
 
 function updateHostLobby() {
@@ -194,23 +234,30 @@ function updateHostLobby() {
     if (!statusDiv || !startBtn) return;
 
     const connected = Object.keys(clientConns).map(Number);
-    const needed = onlineTotalPlayers - 1;
     const factionColors = ['','#00ff88','#cc00ff','#00aaff','#FFD700'];
     const factionNames  = ['','Verde','Viola','Blu','Oro'];
 
     const lines = [`<span style="color:${factionColors[1]}">P1 Verde</span>: ✅ Tu (Host)`];
+    let allReady = true;
     for (let n = 2; n <= onlineTotalPlayers; n++) {
-        const status = connected.includes(n) ? '✅ Connesso' : '⏳ In attesa...';
+        let status;
+        if (onlineAIFactions.has(n)) {
+            status = '🤖 BOT (AI)';
+        } else if (connected.includes(n)) {
+            status = '✅ Connesso';
+        } else {
+            status = '⏳ In attesa...';
+            allReady = false;
+        }
         lines.push(`<span style="color:${factionColors[n]}">P${n} ${factionNames[n]}</span>: ${status}`);
     }
     statusDiv.innerHTML = lines.join('<br>');
 
-    const allConnected = connected.length >= needed;
-    startBtn.disabled = !allConnected;
-    startBtn.style.borderColor = allConnected ? '#00ff88' : '#555';
-    startBtn.style.color       = allConnected ? '#00ff88' : '#555';
-    startBtn.style.cursor      = allConnected ? 'pointer' : 'not-allowed';
-    startBtn.style.background  = allConnected ? 'rgba(0,255,136,0.1)' : 'transparent';
+    startBtn.disabled = !allReady;
+    startBtn.style.borderColor = allReady ? '#00ff88' : '#555';
+    startBtn.style.color       = allReady ? '#00ff88' : '#555';
+    startBtn.style.cursor      = allReady ? 'pointer' : 'not-allowed';
+    startBtn.style.background  = allReady ? 'rgba(0,255,136,0.1)' : 'transparent';
 }
 
 function setupHostConnection(c, playerNum) {
@@ -397,9 +444,12 @@ function handleClientReceivedData(data) {
 
     } else if (data.type === 'GAME_STATE') {
         if (data.state.themeId) {
-        const themeToApply = bgOptions.find(t => t.id === data.state.themeId);
-        if (themeToApply) applyTheme(themeToApply);
-    }
+            const themeToApply = bgOptions.find(t => t.id === data.state.themeId);
+            if (themeToApply) applyTheme(themeToApply);
+        }
+        if (data.state.onlineAIFactions) {
+            onlineAIFactions = new Set(data.state.onlineAIFactions);
+        }
         receiveGameState(data.state);
         startActiveGameUI(data.state.startingPlayer);
 
@@ -512,16 +562,40 @@ function copyMyID() {
 
 function hostStartGame() {
     const needed = onlineTotalPlayers - 1;
-    if (Object.keys(clientConns).length < needed) return;
+    // Le fazioni AI non richiedono un client connesso
+    const humanClientsNeeded = needed - onlineAIFactions.size;
+    if (Object.keys(clientConns).length < humanClientsNeeded) return;
 
     document.getElementById('network-menu').style.display = 'none';
     currentPlayer = 1;
     setupData = { points: 30, agents: [] };
-    clientSetupBuffer = {}; // FIX BUG 2: reset buffer ad ogni nuova partita
+    clientSetupBuffer = {};
     for (let p = 1; p <= 4; p++) { 
         players[p].hq = null; 
         players[p].agents = []; 
     }
+
+    // Auto-genera il setup per le fazioni AI e marcale subito come pronte
+    onlineAIFactions.forEach(faction => {
+        const generatedAgents = [];
+        const spriteOffset = (faction - 1) * 4;
+        for (let i = 0; i < 3; i++) {
+            const hp = Math.floor(Math.random() * 4) + 1;
+            generatedAgents.push({
+                id: crypto.randomUUID(), type: 'agent', faction,
+                sprite: getRandomSprite(SPRITE_POOLS[faction]),
+                customSpriteId: `AG${i + 1 + spriteOffset}`,
+                hp, maxHp: hp,
+                mov: Math.floor(Math.random() * 2) + 2,
+                rng: Math.floor(Math.random() * 3) + 2,
+                dmg: Math.floor(Math.random() * 4) + 1,
+                ap: 3, q: 0, r: 0
+            });
+        }
+        clientSetupBuffer[faction] = generatedAgents;
+        playersReady[faction] = true;
+    });
+
     updateSetupUI();
 }
 
@@ -566,7 +640,8 @@ function tryHostStart() {
             walls, 
             players: playersSnapshot, 
             totalPlayers: onlineTotalPlayers, 
-            startingPlayer 
+            startingPlayer,
+            onlineAIFactions: Array.from(onlineAIFactions)
         }
     };
 

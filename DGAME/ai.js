@@ -3,7 +3,11 @@
    ============================================================ */
 
 async function executeAITurn() {
-    if (state !== 'PLAYING' || currentPlayer <= 1 || !isAIActive()) return;
+    // Modalità locale: richiede checkbox attivo e fazione > 1
+    // Modalità online: basta che la fazione corrente sia nella lista AI dell'host
+    const isOnlineAI = isOnline && isHost && onlineAIFactions.has(currentPlayer);
+    const isLocalAI  = !isOnline && currentPlayer > 1 && isAIActive();
+    if (state !== 'PLAYING' || (!isOnlineAI && !isLocalAI)) return;
 
     const aiFaction = currentPlayer;
     const myAgents = players[aiFaction].agents.filter(a => a.hp > 0);

@@ -72,7 +72,8 @@ function startTimer() {
 
 // --- TURNI ---
 function endTurn(fromNetwork = false) {
-    if (isOnline && currentPlayer !== myPlayerNumber && !fromNetwork) return;
+    const isOnlineAITurn = isOnline && isHost && onlineAIFactions.has(currentPlayer);
+    if (isOnline && currentPlayer !== myPlayerNumber && !fromNetwork && !isOnlineAITurn) return;
     playSFX('click');
     if (!fromNetwork) {
         let next = currentPlayer;
@@ -94,7 +95,8 @@ function isPlayerEliminated(p) {
 
 function autoPassTurn() { 
     if (state === 'PLAYING') { 
-        if (isOnline && currentPlayer !== myPlayerNumber) return; 
+        const isOnlineAITurn = isOnline && isHost && onlineAIFactions.has(currentPlayer);
+        if (isOnline && currentPlayer !== myPlayerNumber && !isOnlineAITurn) return; 
         endTurn(); 
     } 
 }
@@ -122,7 +124,12 @@ function resetTurnState() {
 
     if (state === 'PLAYING') {
         startTimer();
+        // AI locale (modalità offline)
         if (currentPlayer > 1 && isAIActive() && !isOnline) {
+            setTimeout(executeAITurn, 1200);
+        }
+        // AI online: gira solo sull'host, solo per le fazioni marcate come AI
+        if (isOnline && isHost && onlineAIFactions.has(currentPlayer)) {
             setTimeout(executeAITurn, 1200);
         }
     }
@@ -134,7 +141,10 @@ function updateUI() {
     const activeColor = pData.color;
 
     document.documentElement.style.setProperty('--active-faction-color', activeColor);
-    document.getElementById('btn-end-turn').disabled = (currentPlayer > 1 && isAIActive() && !isOnline);
+    const isAITurn = (currentPlayer > 1 && isAIActive() && !isOnline) || 
+                     (isOnline && isHost && onlineAIFactions.has(currentPlayer)) ||
+                     (isOnline && !isHost && onlineAIFactions.has(currentPlayer));
+    document.getElementById('btn-end-turn').disabled = isAITurn || (isOnline && currentPlayer !== myPlayerNumber);
     document.getElementById('current-turn-text').innerText = `Turno ${pData.name}`;
 
     const infoPanel = document.getElementById('selected-agent-info');
@@ -248,6 +258,7 @@ function handleCanvasClick(e) {
     if (state !== 'PLAYING') return;
     if (!isOnline && currentPlayer > 1 && isAIActive()) return;
     if (isOnline && currentPlayer !== myPlayerNumber) return;
+    if (isOnline && onlineAIFactions.has(currentPlayer)) return;
 
     const rect = canvas.getBoundingClientRect();
     const hex = pixelToHex(e.clientX - rect.left, e.clientY - rect.top);
@@ -297,7 +308,8 @@ function executeRemoteAction(data) {
 }
 
 function executeAction(targetCell, fromNetwork = false) {
-    if (isOnline && !fromNetwork && currentPlayer !== myPlayerNumber) return;
+    const isOnlineAITurn = isOnline && isHost && onlineAIFactions.has(currentPlayer);
+    if (isOnline && !fromNetwork && currentPlayer !== myPlayerNumber && !isOnlineAITurn) return;
     let success = false; 
     let actionCost = 1;
     const originQ = selectedAgent.q; 
@@ -355,7 +367,7 @@ function executeAction(targetCell, fromNetwork = false) {
                 sQ: originQ, 
                 sR: originR, 
                 mode: currentActionMode, 
-                actingPlayer: myPlayerNumber 
+                actingPlayer: currentPlayer
             });
         }
         selectedAgent.ap -= actionCost;
