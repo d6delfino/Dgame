@@ -1,0 +1,312 @@
+/* ============================================================
+   style.css — Stili UI per Syndicate Hex Wars: Neon Ops
+   ============================================================ */
+
+:root {
+    --bg-image: url('sfondo.jpg');
+    --bg-dark: #050509;
+    --panel-bg: rgba(10, 10, 20, 0.9);
+    --p1-neon: #00ff88;
+    --p1-fill: rgba(0, 255, 136, 0.2);
+    --p2-neon: #cc00ff;
+    --p2-fill: rgba(204, 0, 255, 0.2);
+    --p3-neon: #00aaff;
+    --p3-fill: rgba(0, 170, 255, 0.2);
+    --p4-neon: #FFD700;
+    --p4-fill: rgba(255, 215, 0, 0.2);
+    --move-neon: #00ffff;
+    --move-fill: rgba(0, 255, 255, 0.25);
+    --atk-neon: #ff3333;
+    --atk-fill: rgba(255, 51, 51, 0.3);
+    --build-neon: #FFD700;
+    --build-fill: rgba(255, 215, 0, 0.3);
+    --text-main: #a0a0b0;
+    --font-stack: 'Courier New', Courier, monospace;
+    --active-faction-color: var(--p1-neon);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+    color: var(--text-main);
+    font-family: var(--font-stack);
+    user-select: none;
+    position: relative;
+    height: 100vh;
+    width: 100vw;
+}
+
+#game-layout {
+    position: relative;
+    width: 100vw; height: 100vh; height: 100dvh;
+    display: flex; justify-content: center; align-items: center;
+}
+
+canvas { background: transparent; cursor: crosshair; }
+
+.ui-panel {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 2px solid var(--active-faction-color);
+    border-radius: 4px; pointer-events: auto;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    transition: border-color 0.4s ease;
+}
+
+#legend-panel { top: 20px; left: 20px; width: 280px; padding: 15px; }
+#my-id-display { user-select: text !important; cursor: text; margin-bottom: 10px; }
+
+#legend-panel h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px; text-transform: uppercase; 
+    color: var(--active-faction-color);
+    border-bottom: 1px solid #333; padding-bottom: 5px;
+    transition: color 0.4s ease;
+}
+
+.legend-item { display: flex; align-items: center; margin-bottom: 12px; font-size: 20px; }
+.legend-item span { color: var(--active-faction-color); transition: color 0.4s ease; }
+.hex-icon { width: 24px; height: 28px; margin-right: 15px; position: relative; }
+.hex-icon svg { width: 100%; height: 100%; }
+.hex-icon.agent-hex {
+    background-color: var(--active-faction-color);
+    /* Ritaglio a forma di esagono */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.4s ease;
+}
+.hex-icon.agent-hex::after {
+    content: "";
+    position: absolute;
+    width: 70%; /* Spessore del bordo */
+    height: 70%;
+    background-color: var(--panel-bg); /* Colore interno uguale allo sfondo pannello */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.hex-icon.agent-hex svg {
+    display: none;
+}
+
+#controls-panel { bottom: 20px; right: 20px; width: 380px; padding: 15px; display: none; }
+#cards-panel-header { display: none !important; }
+#turn-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+
+#current-turn-text { 
+    font-weight: bold; font-size: 1.8em;
+    text-transform: uppercase; color: var(--active-faction-color);
+    transition: color 0.4s ease;
+}
+
+.action-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+
+button.action-btn {
+    background: #1a1a2e; border: 1px solid #3a3a50; color: #fff;
+    padding: 12px; font-family: var(--font-stack); font-weight: bold;
+    cursor: pointer; text-transform: uppercase; font-size: 18px;
+    transition: all 0.2s;
+}
+
+button.action-btn:hover:not(:disabled) { background: #2a2a40; border-color: #5a5a70; }
+button.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#selected-agent-info { font-size: 18px; border-top: 1px solid #333; padding-top: 10px; margin-top: 10px; }
+
+#setup-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; 
+    align-items: center; justify-content: center; z-index: 100; pointer-events: auto;
+}
+
+#setup-box {
+    background: #111118; border: 2px solid #333; border-radius: 8px;
+    width: 1000px; max-height: 85vh; padding: 25px;
+    box-shadow: 0 0 30px rgba(0,255,136, 0.2); display: flex; flex-direction: column;
+}
+
+#setup-header { text-align: center; margin-bottom: 20px; }
+#setup-title { font-size: 28px; text-transform: uppercase; margin: 0; }
+#setup-points-display { font-size: 20px; margin: 10px 0; color: #fff; }
+#agents-market { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 10px; }
+
+.market-agent-card {
+    background: #1a1a25; border: 1px solid #333; border-radius: 4px;
+    padding: 15px; margin-bottom: 15px;
+    display: grid; grid-template-columns: 100px 1fr auto; gap: 15px; align-items: center;
+}
+
+.agent-visual { text-align: center; font-size: 12px; }
+.agent-stats-config { display: flex; flex-wrap: nowrap; gap: 15px; }
+
+.stat-config-item {
+    display: flex; align-items: center; background: #0a0a10;
+    border: 1px solid #2a2a35; padding: 5px 10px; border-radius: 4px;
+}
+.stat-label { font-size: 11px; text-transform: uppercase; color: #888; margin-right: 8px; width: 40px;}
+.stat-value { font-size: 20px; font-weight: bold; color: #fff; margin: 0 10px; width: 25px; text-align: center;}
+
+button.stat-btn { background: #333; color: #fff; border: none; width: 22px; height: 22px; cursor: pointer; font-weight: bold; }
+button.stat-btn:hover:not(:disabled) { background: #555; }
+button.stat-btn:disabled { opacity: 0.3; }
+
+.p1-theme { border-color: var(--p1-neon) !important; color: var(--p1-neon) !important; }
+.p2-theme { border-color: var(--p2-neon) !important; color: var(--p2-neon) !important; }
+.p3-theme { border-color: var(--p3-neon) !important; color: var(--p3-neon) !important; }
+.p4-theme { border-color: var(--p4-neon) !important; color: var(--p4-neon) !important; }
+.text-p1 { color: var(--p1-neon); }
+.text-p2 { color: var(--p2-neon); }
+.text-p3 { color: var(--p3-neon); }
+.text-p4 { color: var(--p4-neon); }
+.sprite-preview { font-size: 24px; margin-bottom: 5px; display: block; }
+
+#audio-toggle {
+    position: fixed; top: 10px; right: 10px; z-index: 1000;
+    background: rgba(0, 0, 0, 0.6); color: #fff; 
+    border: 2px solid var(--p1-neon); /* Bordo di base */
+    padding: 8px 12px; cursor: pointer; font-family: var(--font-stack); 
+    font-size: 12px; border-radius: 4px;
+    transition: border-color 0.4s, box-shadow 0.4s; /* Transizione fluida */
+}
+
+@media (max-width: 768px) {
+    /* === SETUP SCREEN — invariata === */
+    .market-agent-card { grid-template-columns: 60px 1fr !important; gap: 8px !important; padding: 10px !important; }
+    .agent-stats-config { flex-wrap: wrap !important; gap: 5px !important; grid-column: 1 / span 2; }
+    .stat-config-item { padding: 4px 6px !important; flex: 1 1 45%; justify-content: center; }
+    .stat-value { font-size: 16px !important; margin: 0 5px !important; }
+    #selected-agent-info { font-size: 13px !important; text-align: center; }
+    #setup-box { width: 95vw; max-height: 85vh; overflow-y: auto; padding: 10px; }
+
+    /* === LEGENDA — apribile/chiudibile come prima === */
+    #legend-panel {
+        display: none; position: fixed; top: 60px; left: 2vw !important; width: 90vw;
+        max-height: 70vh; overflow-y: auto; z-index: 1001; bottom: auto;
+    }
+    #legend-panel.visible { display: block !important; }
+
+    /* 🔴 INIZIO NUOVE REGOLE PER RIDURRE TUTTO AL ~70% 🔴 */
+    #legend-panel h2 { font-size: 17px !important; margin-bottom: 8px !important; }
+    #legend-panel .legend-item { font-size: 14px !important; margin-bottom: 10px !important; line-height: 1.2; }
+    #legend-panel .legend-item span[style*="14px"] { font-size: 10px !important; } /* Riduce il testo piccolo tra parentesi */
+    #legend-panel .hex-icon { width: 17px !important; height: 20px !important; margin-right: 10px !important; font-size: 16px !important; }
+    #legend-panel .hex-icon > div { transform: scale(0.7); } /* Rimpicciolisce gli elementi disegnati con div (es. barricata) */
+    #legend-panel .legend-item span[style*="18px"] { font-size: 13px !important; } /* Riduce il testo dell'obiettivo */
+    #legend-panel > div:last-child { font-size: 12px !important; margin-top: 10px !important; padding-top: 5px !important;} /* Riduce la scritta v0.x.x in fondo */
+    /* 🔴 FINE NUOVE REGOLE 🔴 */
+
+    #mobile-legend-btn {
+        display: block !important; position: fixed; top: 10px; left: 10px; z-index: 1002;
+        background: var(--panel-bg); border: 1px solid var(--active-faction-color);
+        color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 14px; font-family: var(--font-stack);
+    }
+
+    /* === PANNELLO TURNO — compattato, senza toccare altri pannelli === */
+    #controls-panel {
+        width: calc(100vw - 16px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        bottom: max(6px, env(safe-area-inset-bottom)) !important; /* Sollevato di 5px (6 + 5) */
+        padding: 6px 8px 8px 8px !important;
+        box-sizing: border-box !important;
+        max-height: 55vh !important;
+        overflow-y: auto !important;
+        z-index: 1000;
+    }
+
+    /* Intestazione: "TURNO VERDE" ridotto */
+    #turn-header { margin-bottom: 4px !important; }
+    #current-turn-text { font-size: 1.0em !important; }
+    #action-points-display { font-size: 14px !important; }
+
+    /* Messaggio di gioco */
+    #game-message-board { font-size: 11px !important; margin-bottom: 3px !important; min-height: 0 !important; }
+
+    /* Info agente selezionato */
+    #selected-agent-info { font-size: 10px !important; margin-bottom: 3px !important; padding-top: 3px !important; }
+
+    /* Tutti e 4 i pulsanti azione su una riga */
+    .action-btn-group { grid-template-columns: 1fr 1fr 1fr 1fr !important; gap: 4px !important; margin-bottom: 4px !important; }
+
+    /* Bottoni azione nel pannello turno — piccoli */
+    #controls-panel button.action-btn { padding: 6px 2px !important; font-size: 10px !important; }
+
+    /* Pannello carte: nascondi header con icona e scritta "CARTE" */
+    #cards-panel-header { display: none !important; }
+    #ingame-cards-panel { margin-top: 3px !important; padding-top: 3px !important; border-top: 1px solid #333; }
+    #ingame-card-slots { gap: 4px !important; }
+
+    /* Pulsante Passa Turno */
+    #btn-end-turn { margin-top: 4px !important; padding: 7px !important; font-size: 11px !important; }
+
+    /* Crediti + pulsante negozio sulla stessa riga */
+    #credit-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 6px !important;
+        margin-top: 4px !important;
+        padding: 4px 0 !important;
+        border-top: 1px solid #333 !important;
+        border-bottom: none !important;
+        background: transparent !important;
+    }
+    #credit-shop-btn { flex: 1 !important; padding: 6px 4px !important; font-size: 11px !important; min-height: 0 !important; margin: 0 !important; }
+    #credits-display { font-size: 12px !important; padding: 0 !important; white-space: nowrap; }
+
+    /* Negozio: dimensione ragionevole e chiudibile */
+    #credit-shop-panel {
+        max-height: 50vh !important;
+        overflow-y: auto !important;
+    }
+
+    #network-menu > div:nth-of-type(2) {
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+        width: 95% !important;
+        display: flex !important;
+    }
+
+    /* Riduce la dimensione dei due bottoni principali del menu per farli stare affiancati */
+    #network-menu > div:nth-of-type(2) > .action-btn {
+        flex: 1 !important;
+        padding: 12px 2px !important;
+        font-size: 10px !important;
+        white-space: nowrap !important;
+        letter-spacing: 0px !important;
+    }
+
+    /* Ottimizzazione generale per il menu di rete su schermi piccoli */
+    #network-menu {
+        justify-content: flex-start !important; 
+        padding-top: 20px !important;
+        overflow-y: auto !important;
+        height: 100vh !important;
+    }
+    #local-options, #online-options {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Rende i bottoni 2P, 3P, 4P flessibili e centrati */
+    #local-options .action-btn, 
+    #online-options .action-btn,
+    #host-panel .action-btn[id^="online-p-btn-"] {
+    flex: 1 1 0px !important;
+    /* Raddoppiamo l'impatto visivo */
+    min-width: 70px !important;    /* Forza una larghezza base più ampia */
+    padding: 12px 20px !important;  /* Aumenta lo spazio interno ai lati del testo */
+    font-size: 14px !important;     /* Testo leggermente più grande per bilanciare */
+    
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+}
+}
+
+body, html { margin: 0; overflow: hidden; position: fixed; width: 100%; height: 100%; background-color: #000 !important; }
