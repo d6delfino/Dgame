@@ -1,0 +1,505 @@
+/* ============================================================
+   style.css — Stili UI per Syndicate Hex Wars: Neon Ops
+   ============================================================ */
+
+:root {
+    --bg-image: url('sfondo.jpg');
+    --bg-dark: #050509;
+    --panel-bg: rgba(10, 10, 20, 0.9);
+    --p1-neon: #00ff88;
+    --p1-fill: rgba(0, 255, 136, 0.2);
+    --p2-neon: #cc00ff;
+    --p2-fill: rgba(204, 0, 255, 0.2);
+    --p3-neon: #00aaff;
+    --p3-fill: rgba(0, 170, 255, 0.2);
+    --p4-neon: #FFD700;
+    --p4-fill: rgba(255, 215, 0, 0.2);
+    --move-neon: #00ffff;
+    --move-fill: rgba(0, 255, 255, 0.25);
+    --atk-neon: #ff3333;
+    --atk-fill: rgba(255, 51, 51, 0.3);
+    --build-neon: #FFD700;
+    --build-fill: rgba(255, 215, 0, 0.3);
+    --text-main: #a0a0b0;
+    --font-stack: 'Courier New', Courier, monospace;
+    --active-faction-color: var(--p1-neon);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+    color: var(--text-main);
+    font-family: var(--font-stack);
+    user-select: none;
+    position: relative;
+    height: 100vh;
+    width: 100vw;
+}
+
+body, html { 
+    margin: 0; 
+    overflow: hidden; 
+    position: fixed; 
+    width: 100%; 
+    height: 100%; 
+    background-color: #000 !important; 
+}
+
+#game-layout {
+    position: relative;
+    width: 100vw; height: 100vh; height: 100dvh;
+    display: flex; justify-content: center; align-items: center;
+}
+
+canvas { background: transparent; cursor: crosshair; }
+
+.ui-panel {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 2px solid var(--active-faction-color);
+    border-radius: 4px; pointer-events: auto;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    transition: border-color 0.4s ease;
+}
+
+/* ============================================================
+   LEGENDA (Universale: Desktop & Mobile)
+   ============================================================ */
+
+/* Il bottone per aprire/chiudere la legenda (Sempre visibile) */
+#legend-toggle-btn {
+    position: fixed; 
+    top: 5px; 
+    left: 5px; 
+    z-index: 1002;
+    background: var(--panel-bg); 
+    border: 2px solid var(--active-faction-color);
+    color: #fff; 
+    padding: 8px 12px; 
+    border-radius: 4px; 
+    font-size: 14px; 
+    font-family: var(--font-stack);
+    cursor: pointer;
+    font-weight: bold;
+    transition: border-color 0.4s, box-shadow 0.4s;
+}
+
+/* Il pannello della legenda (Nascosto di default ovunque) */
+#legend-panel { 
+    display: none; /* Nascondiamo la legenda all'avvio */
+    position: fixed; /* Usiamo fixed invece di absolute per non dipendere da game-layout */
+    top: 50px; /* Sotto il bottone */
+    left: 10px; 
+    width: 280px; 
+    padding: 15px; 
+    z-index: 1001; /* Sotto il bottone, sopra il gioco */
+    max-height: calc(100vh - 80px); /* Non esce mai dallo schermo */
+    overflow-y: auto; /* Scrolla se serve */
+}
+
+/* Classe aggiunta dal JS per mostrare il pannello */
+#legend-panel.visible {
+    display: block !important;
+}
+
+#my-id-display { user-select: text !important; cursor: text; margin-bottom: 10px; }
+
+#legend-panel h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px; text-transform: uppercase; 
+    color: var(--active-faction-color);
+    border-bottom: 1px solid #333; padding-bottom: 5px;
+    transition: color 0.4s ease;
+}
+
+.legend-item { display: flex; align-items: center; margin-bottom: 12px; font-size: 20px; }
+.legend-item span { color: var(--active-faction-color); transition: color 0.4s ease; }
+.hex-icon { width: 24px; height: 28px; margin-right: 15px; position: relative; }
+.hex-icon svg { width: 100%; height: 100%; }
+.hex-icon.agent-hex {
+    background-color: var(--active-faction-color);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color 0.4s ease;
+}
+.hex-icon.agent-hex::after {
+    content: "";
+    position: absolute;
+    width: 70%; height: 70%;
+    background-color: var(--panel-bg);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.hex-icon.agent-hex svg { display: none; }
+
+/* ============================================================
+   CONTROLLI DI GIOCO E BOTTONI
+   ============================================================ */
+#controls-panel { bottom: 20px; right: 20px; width: 380px; padding: 15px; display: none; }
+#cards-panel-header { display: none !important; }
+#turn-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+
+#current-turn-text { 
+    font-weight: bold; font-size: 1.8em;
+    text-transform: uppercase; color: var(--active-faction-color);
+    transition: color 0.4s ease;
+}
+
+/* Modificati margini per inversione con statistiche */
+.action-btn-group { 
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; 
+    margin-bottom: 5px; /* Ridotto perché ora è sopra la linea */
+}
+
+button.action-btn {
+    background: #1a1a2e; border: 1px solid #3a3a50; color: #fff;
+    padding: 12px; font-family: var(--font-stack); font-weight: bold;
+    cursor: pointer; text-transform: uppercase; font-size: 18px;
+    transition: all 0.2s;
+}
+
+button.action-btn:hover:not(:disabled) { background: #2a2a40; border-color: #5a5a70; }
+button.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Modificato per fare da separatore e stare sotto i bottoni */
+#selected-agent-info { 
+    font-size: 18px; 
+    border-top: 1px solid #333; 
+    padding-top: 10px; 
+    margin-top: 10px; 
+}
+
+/* ============================================================
+   SETUP SCREEN & LOBBY
+   ============================================================ */
+#setup-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; 
+    align-items: center; justify-content: center; z-index: 100; pointer-events: auto;
+    overflow-y: auto;
+}
+
+#setup-box {
+    background: #111118; border: 2px solid #333; border-radius: 8px;
+    width: 1000px; max-height: 85vh; padding: 25px;
+    box-shadow: 0 0 30px rgba(0,255,136, 0.2); display: flex; flex-direction: column;
+}
+
+#setup-header { text-align: center; margin-bottom: 20px; }
+#setup-title { font-size: 28px; text-transform: uppercase; margin: 0; }
+#setup-points-display { font-size: 20px; margin: 10px 0; color: #fff; }
+#agents-market { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 10px; }
+
+/* Selettore fazione: singola riga scorrevole, non va mai a capo */
+#faction-selector-row {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+#faction-selector-row::-webkit-scrollbar { display: none; }
+
+.market-agent-card {
+    background: #1a1a25; border: 1px solid #333; border-radius: 4px;
+    padding: 15px; margin-bottom: 15px;
+    display: grid; grid-template-columns: 100px 1fr auto; gap: 15px; align-items: center;
+}
+
+.agent-visual { text-align: center; font-size: 12px; }
+.agent-stats-config { display: flex; flex-wrap: nowrap; gap: 15px; }
+
+.stat-config-item {
+    display: flex; align-items: center; background: #0a0a10;
+    border: 1px solid #2a2a35; padding: 5px 10px; border-radius: 4px;
+}
+.stat-label { font-size: 11px; text-transform: uppercase; color: #888; margin-right: 8px; width: 40px;}
+.stat-value { font-size: 20px; font-weight: bold; color: #fff; margin: 0 10px; width: 25px; text-align: center;}
+
+button.stat-btn { background: #333; color: #fff; border: none; width: 22px; height: 22px; cursor: pointer; font-weight: bold; }
+button.stat-btn:hover:not(:disabled) { background: #555; }
+button.stat-btn:disabled { opacity: 0.3; }
+
+/* ============================================================
+   TEMI COLORI GIOCATORI (1-8)
+   ============================================================ */
+.p1-theme { border-color: var(--p1-neon) !important; color: var(--p1-neon) !important; }
+.p2-theme { border-color: var(--p2-neon) !important; color: var(--p2-neon) !important; }
+.p3-theme { border-color: var(--p3-neon) !important; color: var(--p3-neon) !important; }
+.p4-theme { border-color: var(--p4-neon) !important; color: var(--p4-neon) !important; }
+.p5-theme { border-color: #ff3333 !important; color: #ff3333 !important; }
+.p6-theme { border-color: #ffffff !important; color: #ffffff !important; }
+.p7-theme { border-color: #444444 !important; color: #444444 !important; }
+.p8-theme { border-color: #ff69b4 !important; color: #ff69b4 !important; }
+
+.text-p1 { color: var(--p1-neon); }
+.text-p2 { color: var(--p2-neon); }
+.text-p3 { color: var(--p3-neon); }
+.text-p4 { color: var(--p4-neon); }
+.text-p5 { color: #ff3333; }
+.text-p6 { color: #ffffff; }
+.text-p7 { color: #444444; }
+.text-p8 { color: #ff69b4; }
+
+.sprite-preview { font-size: 24px; margin-bottom: 5px; display: block; }
+
+.p5-theme .hex-icon.agent-hex { background-color: #ff3333; }
+.p6-theme .hex-icon.agent-hex { background-color: #ffffff; }
+.p7-theme .hex-icon.agent-hex { background-color: #444444; }
+.p8-theme .hex-icon.agent-hex { background-color: #ff69b4; }
+
+#audio-toggle {
+    position: fixed; 
+    top: 45px; /* Posizionato sotto la Legenda */
+    left: 5px; /* Allineato a sinistra (5px dal bordo) */
+    bottom: auto; /* Rimuoviamo il vecchio aggancio in basso */
+    right: auto;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.6); 
+    color: #fff; 
+    border: 2px solid var(--p1-neon);
+    padding: 8px 12px; 
+    cursor: pointer; 
+    font-family: var(--font-stack); 
+    font-size: 12px; 
+    border-radius: 4px;
+    transition: border-color 0.4s, box-shadow 0.4s;
+}
+
+/* ============================================================
+   RESPONSIVE DESIGN (Smartphone e Tablet piccoli)
+   La query rileva schermi stretti (ritratto) o molto bassi (orizzontale)
+   ============================================================ */
+@media (max-width: 950px), (max-height: 500px) {
+
+    /* --- MENU RETE E SETUP --- */
+    .market-agent-card { grid-template-columns: 60px 1fr !important; gap: 8px !important; padding: 10px !important; }
+    .agent-stats-config { flex-wrap: wrap !important; gap: 5px !important; grid-column: 1 / span 2; }
+    .stat-config-item { padding: 4px 6px !important; flex: 1 1 45%; justify-content: center; }
+    .stat-value { font-size: 16px !important; margin: 0 5px !important; }
+
+    /* Setup box: sfrutta tutto lo schermo verticale su mobile */
+    #setup-overlay {
+        justify-content: flex-start !important;
+        padding: 0 !important;
+        align-items: stretch !important;
+    }
+    #setup-box {
+        width: 100% !important;
+        max-width: 100vw !important;
+        min-height: 100dvh !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        padding: 12px 10px 16px !important;
+        box-sizing: border-box !important;
+        overflow-y: auto !important;
+    }
+    #setup-header { margin-bottom: 8px !important; }
+    #setup-title { font-size: 20px !important; }
+    #setup-points-display { font-size: 16px !important; margin: 5px 0 !important; }
+    #agents-market { margin-bottom: 10px !important; padding-right: 0 !important; }
+
+    /* Selettore fazione: singola riga compatta */
+    #faction-selector-row {
+        padding: 6px 8px !important;
+        gap: 6px !important;
+        margin: 6px 0 !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+    }
+    #faction-selector-row button { width: 24px !important; height: 24px !important; flex-shrink: 0 !important; }
+    #faction-selector-row span { font-size: 12px !important; white-space: nowrap !important; }
+
+    #network-menu > div:nth-of-type(2) { flex-wrap: nowrap !important; gap: 8px !important; width: 95% !important; display: flex !important; }
+    #network-menu > div:nth-of-type(2) > .action-btn { flex: 1 !important; padding: 12px 2px !important; font-size: 10px !important; white-space: nowrap !important; letter-spacing: 0px !important; }
+    #network-menu { justify-content: flex-start !important; padding-top: 20px !important;padding-bottom: 60px !important; overflow-y: auto !important; height: 100vh !important; }
+    #local-options, #online-options { max-width: 100vw !important; overflow-x: hidden !important; }
+    
+    #local-options .action-btn:not([onclick="showCampaignMenu()"]),
+    #online-options .action-btn,
+    #host-panel .action-btn[id^="online-p-btn-"] {
+        flex: 1 1 0px !important; min-width: 0px !important; padding: 12px 20px !important; font-size: 14px !important; 
+        display: flex !important; justify-content: center !important; align-items: center !important; text-align: center !important;
+    }
+
+    #local-options [onclick="showCampaignMenu()"] {
+    display: block !important;
+    width: 80% !important;
+    max-width: 300px !important;
+    padding: 15px !important;
+    margin: 10px auto 0 !important;
+    font-size: 14px !important;
+    }
+
+    /* --- LEGENDA (Nascosta di base su Mobile, mostrata via tasto) --- */
+    
+
+    #legend-panel h2 { font-size: 17px !important; margin-bottom: 8px !important; }
+    #legend-panel .legend-item { font-size: 14px !important; margin-bottom: 10px !important; line-height: 1.2; }
+    #legend-panel .legend-item span[style*="14px"] { font-size: 10px !important; } 
+    #legend-panel .hex-icon { width: 17px !important; height: 20px !important; margin-right: 10px !important; font-size: 16px !important; }
+    #legend-panel .hex-icon > div { transform: scale(0.7); } 
+    #legend-panel .legend-item span[style*="18px"] { font-size: 13px !important; } 
+    #legend-panel > div:last-child { font-size: 12px !important; margin-top: 10px !important; padding-top: 5px !important;}
+
+    
+
+    /* --- PANNELLO COMUNI MOBILE --- */
+    #turn-header { margin-bottom: 4px !important; }
+    #current-turn-text { font-size: 1.0em !important; }
+    #action-points-display { font-size: 14px !important; }
+    #game-message-board { font-size: 11px !important; margin-bottom: 3px !important; min-height: 0 !important; }
+    #selected-agent-info { font-size: 10px !important; margin-bottom: 3px !important; padding-top: 3px !important; margin-top: 3px !important;}
+    #controls-panel button.action-btn { padding: 6px 2px !important; font-size: 10px !important; }
+    #cards-panel-header { display: none !important; }
+    #ingame-cards-panel { margin-top: 3px !important; padding-top: 3px !important; border-top: 1px solid #333; }
+    #ingame-card-slots { gap: 4px !important; }
+    #btn-end-turn { margin-top: 4px !important; padding: 7px !important; font-size: 11px !important; }
+
+    #credit-row {
+        display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;
+        gap: 6px !important; margin-top: 4px !important; padding: 4px 0 !important; border-top: 1px solid #333 !important;
+        border-bottom: none !important; background: transparent !important;
+    }
+    #credit-shop-btn { flex: 1 !important; padding: 6px 4px !important; font-size: 11px !important; min-height: 0 !important; margin: 0 !important; }
+    #credits-display { font-size: 12px !important; padding: 0 !important; white-space: nowrap; }
+    #credit-shop-panel { max-height: 50vh !important; overflow-y: auto !important; }
+
+    /* --- ORIENTAMENTO VERTICALE (Ritratto) --- */
+    @media (orientation: portrait) {
+        #controls-panel {
+            width: calc(100vw - 16px) !important;
+            left: 8px !important; right: 8px !important;
+            bottom: max(6px, env(safe-area-inset-bottom)) !important;
+            padding: 6px 8px 8px 8px !important; box-sizing: border-box !important;
+            max-height: 55vh !important; overflow-y: auto !important; z-index: 1000;
+        }
+        .action-btn-group { grid-template-columns: 1fr 1fr 1fr 1fr !important; gap: 4px !important; margin-bottom: 4px !important; }
+    }
+
+    /* --- ORIENTAMENTO ORIZZONTALE (Paesaggio) --- */
+    @media (orientation: landscape) {
+        #controls-panel {
+            width: 280px !important;
+            right: 8px !important; left: auto !important;
+            bottom: max(6px, env(safe-area-inset-bottom)) !important;
+            top: 8px !important; /* Esteso quasi a tutto schermo in altezza sulla destra */
+            padding: 6px 8px 8px 8px !important; box-sizing: border-box !important;
+            max-height: none !important; overflow-y: auto !important; z-index: 1000;
+        }
+        /* Due colonne di bottoni invece di 4, per adattarsi alla larghezza stretta della sidebar */
+        .action-btn-group { grid-template-columns: 1fr 1fr !important; gap: 4px !important; margin-bottom: 4px !important; }        
+    
+        }
+}
+
+/* ============================================================
+   STILI MODALITÀ CAMPAGNA
+   ============================================================ */
+.campaign-sector {
+    background: #1a1a25; border: 3px solid #444; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.3s; color: #fff; font-weight: bold; text-shadow: 0 0 5px #000;
+}
+.campaign-sector:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(255,255,255,0.3); }
+.campaign-sector.neutral { border-color: #888; color: #888; }
+.campaign-sector.p1 { border-color: var(--p1-neon); box-shadow: 0 0 15px var(--p1-fill); }
+.campaign-sector.p2 { border-color: var(--p2-neon); box-shadow: 0 0 15px var(--p2-fill); }
+.campaign-sector.p3 { border-color: var(--p3-neon); box-shadow: 0 0 15px var(--p3-fill); color: var(--p3-neon); }
+.campaign-sector.p4 { border-color: var(--p4-neon); box-shadow: 0 0 15px var(--p4-fill); color: var(--p4-neon); }
+.campaign-line { position: absolute; background: #444; z-index: -1; }
+
+/* ============================================================
+   SCHERMATA DI CARICAMENTO (VERSIONE FINALE TESTATA)
+   ============================================================ */
+#loading-screen {
+    position: fixed; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%;
+    background-color: #050509; /* Sfondo leggermente bluastro scuro */
+    z-index: 9999999;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    color: var(--p1-neon); 
+    font-family: var(--font-stack);
+    transition: opacity 0.5s ease;
+}
+
+#loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 60px; height: 60px;
+    border: 6px solid rgba(0, 255, 136, 0.1);
+    border-top-color: var(--p1-neon); 
+    border-radius: 50%;
+    animation: spin 1s linear infinite; 
+    margin-bottom: 20px;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+#loading-text {
+    font-size: 18px;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+}
+
+/* PULSANTE GIOCA GIGANTE VIOLA */#start-game-btn {
+    display: none; 
+    padding: 30px 20px; /* Ridotto il padding orizzontale fisso */
+    background: rgba(204, 0, 255, 0.1); 
+    border: 5px solid #cc00ff; 
+    color: #cc00ff; 
+    font-family: var(--font-stack);
+    font-size: 50px; 
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    
+    /* FIX CENTRATURA SCRITTA */
+    letter-spacing: 5px;
+    text-indent: 5px;   /* COMPENSA lo spazio vuoto dopo l'ultima lettera */
+    text-align: center; 
+    box-sizing: border-box; /* Impedisce al padding di sballare la larghezza */
+    
+    min-width: 320px;   /* Larghezza minima per PC */
+    box-shadow: 0 0 30px rgba(204, 0, 255, 0.6);
+    transition: all 0.2s ease;
+    animation: pulse-purple 1.5s infinite;
+}
+
+#start-game-btn:hover {
+    background: rgba(204, 0, 255, 0.3);
+    transform: scale(1.05); /* Effetto pop-up */
+    box-shadow: 0 0 50px rgba(204, 0, 255, 1);
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes pulse-purple {
+    0% { transform: scale(1); box-shadow: 0 0 20px rgba(204, 0, 255, 0.5); }
+    50% { transform: scale(1.02); box-shadow: 0 0 45px rgba(204, 0, 255, 0.9); }
+    100% { transform: scale(1); box-shadow: 0 0 20px rgba(204, 0, 255, 0.5); }
+}
+
+/* Adattamento per Smartphone (per non farlo uscire dai bordi) */
+@media (max-width: 600px) {
+    #start-game-btn {
+        font-size: 32px;    /* Leggermente più piccolo per stare in una riga */
+        padding: 20px 10px;
+        width: 85%;         /* Usa la percentuale invece del padding fisso */
+        min-width: 0;       /* Rimuove il vincolo del PC */
+        letter-spacing: 4px; 
+        text-indent: 4px;   /* Deve sempre corrispondere al letter-spacing */
+    }
+}
