@@ -1,0 +1,1904 @@
+/* ============================================================
+   coop.js — Modalità COOPERATIVA Online/Locale (Versione Definitiva NATIVA)
+   ============================================================
+   Aggiunge la modalità "COOP" al menu principale.
+   Tutti i giocatori (fazioni 1-N) cooperano contro i mostri
+   viola (fazione 9, AI nativa) con l'obiettivo di raggiungere e
+   sconfiggere il BOSS sul lato opposto della mappa o uscire.
+
+   DIPENDENZE: constants.js, core.js, gamelogic.js, map.js, ai.js, 
+               setup.js, network_core.js, network_sync.js, main.js
+   ============================================================ */
+
+// ============================================================
+// COSTANTI COOP
+// ============================================================
+const COOP = {
+    FOG_ALPHA:          0.95,   // opacità del velo nero (0=trasparente, 1=opaco)
+    STARTING_CREDITS:    10,    // crediti da spendere nel setup iniziale
+
+    VILLAGE_COUNT:        5,    // numero di villaggi sulla mappa
+    VILLAGE_MIN_HQ_DIST:  8,    // distanza minima dallo spawn
+    VILLAGE_RECRUIT_COST: 3,    // crediti per reclutare un agente in un villaggio
+    VILLAGE_MAX_AGENTS:   3,    // massimo agenti reclutabili per villaggio
+
+    QUEST_COUNT:          4,    // numero di quest attive contemporaneamente
+
+    LAIR_COUNT:           6,    // numero di tane sulla mappa
+    LAIR_MIN_HQ_DIST:     6,    // distanza minima dallo spawn
+    LAIR_SPAWN_INTERVAL:  3,    // ogni quanti turni la tana spawna un mostro
+    LAIR_MAX_MONSTERS_BASE: 1,  // Base fissa per tana
+    LAIR_MAX_MONSTERS_PER_PLAYER: 2, // Moltiplicatore per giocatore
+    LAIR_REWARD_KILL:     2,    // crediti guadagnati uccidendo un mostro
+
+    MONSTER_HP_MIN:       2,
+    MONSTER_HP_MAX:       5,
+    MONSTER_MOV:          2,
+    MONSTER_RNG:          2,
+    MONSTER_DMG_MIN:      1,
+    MONSTER_DMG_MAX:      3,
+
+    BOSS_HP_MULT:         5,    // moltiplicatore HP rispetto a un mostro normale
+    BOSS_MOV_MULT:        2,    // moltiplicatore Passi
+    BOSS_RNG_MULT:        2,    // moltiplicatore Gittata
+    BOSS_DMG_MULT:        2,    // moltiplicatore Danno
+    BOSS_AP:              4,    // AP del boss per turno
+    BOSS_REWARD:         20,    // crediti guadagnati sconfiggendo il boss
+
+    MONSTER_FACTION:      9,    // Fazione AI che controlla i mostri
+};
+
+// ============================================================
+// STATO COOP
+// ============================================================
+window.coopState = {
+    active:        false,
+    villages:      [],
+    lairs:         [],
+    quests:        [],
+    bossSpawned:   false,
+    bossAgent:     null,
+    exitZone:      [],
+    playersInExit: new Set(),
+    turnCount:     0,
+    monstersKilled: 0,
+    cellsExplored: new Set(),
+    lairsDestroyed: 0,
+    villagesFound: 0,
+    bigMonstersKilled: 0,
+    bossesDefeated: 0,      // <--- AGGIUNTO: quanti boss sono morti
+    totalBossesToKill: 0,   // <--- AGGIUNTO: quanti boss totali devono spawnare
+};
+
+//const _COOP_MONSTER_SPRITES = SPRITE_POOLS[2] || ['👾','🤖','👹'];
+
+const _COOP_QUEST_DEFS = [
+    { id: 'kill_monsters', text: 'Elimina 15 mostri', type: 'kill', target: 15, reward: 10 },
+    { id: 'explore_cells', text: 'Esplora 200 celle', type: 'explore', target: 200, reward: 8 },
+    { id: 'reach_center',  text: 'Raggiungi il centro della mappa', type: 'position', target: 5, reward: 8 },
+    { id: 'kill_lair',     text: 'Distruggi 5 tane di mostri', type: 'kill_lair', target: 5, reward: 20 },
+    { id: 'kill_big',      text: 'Elimina 5 mostri elite (5+ HP)', type: 'kill_big', target: 5, reward: 15 },
+    { id: 'explore_all',   text: 'Scopri tutti i villaggi', type: 'explore_village', target: COOP.VILLAGE_COUNT, reward: 10 },
+];
+
+// ============================================================
+// HOOK DI INTEGRAZIONE MOTORE NATIVO
+// ============================================================
+
+/** 1. Fa credere al motore che la fazione 9 sia controllata dall'AI */
+(function _installCoopAIHook() {
+    const _origIsAI = window.isCurrentPlayerAI;
+    window.isCurrentPlayerAI = function() {
+        if (coopState.active && currentPlayer === COOP.MONSTER_FACTION) return true;
+        if (_origIsAI) return _origIsAI();
+        return false;
+    };
+})();
+
+/** 2. Disabilita la vittoria per eliminazione HQ e instaura la logica Coop */
+(function _installCoopWinHook() {
+    const _origCheckWin = window.checkWinConditions;
+    window.checkWinConditions = function() {
+        if (coopState.active) {
+            _coopCheckExitVictory();
+            
+            // Check Sconfitta: Tutti gli umani morti
+            let allDead = true;
+            for (let p = 1; p <= window._coopHumanPlayers; p++) {
+                if ((players[p].agents || []).some(a => a.hp > 0)) allDead = false;
+            }
+            if (allDead) _coopDefeat();
+            return;
+        }
+        if (_origCheckWin) _origCheckWin();
+    };
+})();
+
+/** 3. Hook standard per turno e rendering */
+function _coopRegisterHooks() {
+    // Esegue lo spawn e l'aggiornamento solo all'inizio del giro (Turno del Giocatore 1)
+    registerTurnResetHook(function () {
+        if (!coopState.active) return;
+
+        // --- LOGICA INIZIO ROUND (Giocatore 1) ---
+        if (currentPlayer === 1) {
+            coopState.turnCount++;
+            _coopSpawnMonsters();
+            _coopUpdatePositionQuests();
+            _coopCheckExitVictory();
+
+            // --- NUOVO: RENDITA VILLAGGI SCOPERTI ---
+            if (coopState.villagesFound > 0) {
+                const villageBonus = coopState.villagesFound * 2;
+                
+                for (let p = 1; p <= window._coopHumanPlayers; p++) {
+                    if (players[p]) {
+                        players[p].credits = (players[p].credits || 0) + villageBonus;
+                    }
+                }
+
+                // Notifica visiva della rendita
+                if (typeof showNotificationBanner === 'function') {
+                    showNotificationBanner(`🏘️ Supporto Villaggi: +${villageBonus} crediti`, "#00ff88", {
+                        duration: 3000,
+                        bottom: '140px' 
+                    });
+                }
+            }
+        }
+
+        // --- LOGICA TURNO MOSTRI (Fazione 9) ---
+        if (currentPlayer === COOP.MONSTER_FACTION) {
+            const monsterData = players[COOP.MONSTER_FACTION];
+
+            // 1. ATTIVAZIONE CARTE (dal Turno 6)
+            if (coopState.turnCount >= 11 && monsterData.cards.length === 0) {
+                // Assegniamo un set iniziale di carte offensive e difensive
+                monsterData.cards = ['C01', 'C07', 'C05']; // Blitz, Scudo, Esplosivo
+                monsterData.usedCards = {};
+                
+                if (typeof showNotificationBanner === 'function') {
+                    showNotificationBanner("⚠️ ATTENZIONE: I mostri hanno evoluto nuove capacità!", players[COOP.MONSTER_FACTION].color, {duration: 4000});
+                }
+            }
+
+            // 2. RENDITA ECONOMICA (Basata sulle Tane e sul Boss)
+            let income = 0;
+            // +1 per ogni tana integra
+            coopState.lairs.forEach(lair => {
+                const cell = grid.get(getKey(lair.q, lair.r));
+                if (cell && cell.entity && cell.entity._isLair) income += 1;
+            });
+            // +2 se il Boss è vivo
+            if (coopState.bossAgent && coopState.bossAgent.hp > 0) income += 2;
+
+            monsterData.credits = (monsterData.credits || 0) + income;
+            
+            // Log in console per debug
+            console.log(`[Coop] Rendita Mostri: +${income} cr (Totale: ${monsterData.credits})`);
+        }
+    });
+
+    registerDrawHook(function () {
+        if (!coopState.active) return;
+        _coopDrawFog();
+        _coopDrawSpecialCells();
+    });
+}
+
+/** 4. Intercetta morti per gestire quest, taglie e vittoria boss */
+(function _installCoopDeathHook() {
+    const _origDeath = window.handleEntityDeath || function(){};
+    window.handleEntityDeath = function (entity, killerFaction) {
+        _origDeath(entity, killerFaction);
+
+        if (!coopState.active) return;
+        
+        // Se muore una tana
+        if (entity._isLair) {
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner('💥 Tana distrutta!', '#ff8800', { top: '80px', duration: 3000 });
+            }
+            _coopProgressLairQuest();
+        }
+
+        if (entity._isMonster) {
+            // Rimosso l'accredito manuale: il motore base (credits.js) 
+            // assegna già +2 crediti e mostra il banner per ogni uccisione.
+
+            _coopProgressKillQuest(entity);
+
+            if (entity._isBoss) {
+            coopState.bossesDefeated++; // Incrementa il numero di boss uccisi
+            coopState.bossAgent = null;
+
+            if (coopState.bossesDefeated < coopState.totalBossesToKill) {
+                // --- CASO: CI SONO ALTRI BOSS IN CODA ---
+                const bossRestanti = coopState.totalBossesToKill - coopState.bossesDefeated;
+                
+                if (typeof showNotificationBanner === 'function') {
+                    showNotificationBanner(
+                        `💀 BOSS ABBATTUTO!<br><span style="color:#ff3333">ATTENZIONE: Un nuovo predatore sta arrivando!</span><br>(${bossRestanti} rimanenti)`,
+                        '#ff8800', { top: '50px', duration: 5000, fontSize: '18px' }
+                    );
+                }
+                
+                // Facciamo spawnare il prossimo boss dopo un breve ritardo (2 secondi)
+                setTimeout(() => {
+                    _coopSpawnBoss();
+                    drawGame();
+                }, 2000);
+
+            } else {
+                // --- CASO: ULTIMO BOSS SCONFITTO ---
+                _coopBossDefeated(killerFaction);
+            }
+            return;
+        }
+
+            const idx = players[COOP.MONSTER_FACTION].agents.findIndex(m => m.id === entity.id);
+            if (idx !== -1) players[COOP.MONSTER_FACTION].agents.splice(idx, 1);
+        }
+
+        _coopUpdateHUD();
+    };
+})();
+
+/** 5. Clic su mappa per Villaggi e Tane */
+(function _installCoopClickHook() {
+    const _origClick = window.handleCanvasClick;
+    // Sarà collegato una volta che window.handleCanvasClick esiste
+    setTimeout(() => {
+        const _actualOrigClick = window.handleCanvasClick;
+        window.handleCanvasClick = function (e) {
+            if (!coopState.active) { _actualOrigClick(e); return; }
+
+            const rect  = canvas.getBoundingClientRect();
+            const cX    = (e.clientX || e.pageX) - rect.left;
+            const cY    = (e.clientY || e.pageY) - rect.top;
+            const hex   = pixelToHex(cX, cY);
+            const cell  = grid.get(getKey(hex.q, hex.r));
+
+            // Villaggio
+            if (cell && cell._coopVillage && selectedAgent &&
+                hexDistance(selectedAgent, cell) <= 1 &&
+                selectedAgent.faction === currentPlayer) {
+                _coopEnterVillage(currentPlayer, { q: cell.q, r: cell.r });
+                return;
+            }
+
+            // Tana: basta che un giocatore umano ci sia sopra per farla saltare in aria
+            if (cell && cell._coopLair) {
+                const lair = coopState.lairs.find(l => l.q === hex.q && l.r === hex.r);
+                if (lair && !lair.destroyed) {
+                    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+                        (players[p].agents || []).forEach(a => {
+                            if (a.q === hex.q && a.r === hex.r && a.hp > 0) {
+                                lair.destroyed = true;
+                                cell._coopLair = false;
+                                if (typeof showNotificationBanner === 'function') {
+                                    showNotificationBanner('💥 Tana distrutta!', '#ff8800', { top: '80px', duration: 3000 });
+                                }
+                                _coopProgressLairQuest();
+                                drawGame();
+                            }
+                        });
+                    }
+                }
+            }
+
+            _actualOrigClick(e);
+        };
+    }, 500);
+})();
+
+// ============================================================
+// AVVIO MODALITÀ COOP
+// ============================================================
+
+function startCoopGame(numPlayers) {
+    numPlayers = numPlayers || 2;
+    window._coopHumanPlayers = numPlayers; 
+    
+    // LA MAGIA E' QUI: Impostiamo i giocatori totali a 9.
+    // 1-8 sono slot per gli umani (ne useremo solo numPlayers). Il 9 è l'AI Mostri.
+    // Questo forza generateProceduralMap() a fare la mappa gigante in automatico.
+    totalPlayers   = COOP.MONSTER_FACTION; 
+    isOnline       = false;
+    myPlayerNumber = 0;
+    currentPlayer  = 1;
+
+    resetPlayers();
+
+    // Inizializza il profilo fazione 9 (Mostri)
+    players[COOP.MONSTER_FACTION] = {
+        hq: null, agents: [],
+        color: COLORS.p2, name: 'Mostri', 
+        credits: 0, // Partono con 0 crediti per il primo acquisto carte al T6
+        _cosmeticFaction: 2,
+        cards: [] 
+    };
+
+    const networkMenu = document.getElementById('network-menu');
+    if (networkMenu) networkMenu.style.display = 'none';
+
+    setupData = { points: COOP.STARTING_CREDITS, agents: [] };
+    coopState.active = false;
+
+    _coopRegisterHooks();
+    updateSetupUI();
+
+    window._origConfirmPlayerSetup = window.confirmPlayerSetup;
+    window.confirmPlayerSetup = function () {
+        if (!window._coopHumanPlayers) {
+            window._origConfirmPlayerSetup();
+            return;
+        }
+        
+        playSFX('click');
+        if (setupData.agents.length === 0) {
+            alert('Devi reclutare almeno un agente.');
+            return;
+        }
+        
+        players[currentPlayer].agents    = JSON.parse(JSON.stringify(setupData.agents));
+        players[currentPlayer].cards     = typeof getFinalCardSelection === 'function' ? getFinalCardSelection() : [];
+        players[currentPlayer].usedCards = {};
+        players[currentPlayer].credits   = setupData.points || 0;
+
+        // Limita il loop del setup solo ai giocatori UMANI reali
+        if (currentPlayer < window._coopHumanPlayers) {
+            currentPlayer++;
+            setupData = { points: COOP.STARTING_CREDITS, agents: [] };
+            if (typeof cardSelectionData !== 'undefined') cardSelectionData.selected = [];
+            updateSetupUI();
+        } else {
+            window.confirmPlayerSetup = window._origConfirmPlayerSetup;
+            _coopLaunch();
+        }
+    };
+}
+
+// ============================================================
+// ASSEGNAZIONE COLORE CASUALE MOSTRI
+// ============================================================
+function _coopAssignRandomMonsterFaction() {
+    const taken = new Set();
+    // 1. Raccoglie i colori (cosmeticFaction) scelti dai giocatori umani
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        if (players[p]) {
+            taken.add(players[p]._cosmeticFaction || p);
+        }
+    }
+    
+    // 2. Trova quali colori (da 1 a 8) sono ancora liberi
+    const available = [];
+    for (let i = 1; i <= 8; i++) {
+        if (!taken.has(i)) available.push(i);
+    }
+    
+    // 3. Ne sceglie uno a caso (o fallback se per qualche motivo assurdo fossero tutti presi)
+    const chosen = available.length > 0 
+        ? available[Math.floor(Math.random() * available.length)] 
+        : Math.floor(Math.random() * 8) + 1;
+    
+    // 4. Assegna i metadati alla fazione dei mostri
+    const def = _FACTION_DEFS[chosen - 1]; // _FACTION_DEFS viene da constants.js
+    
+    if (!players[COOP.MONSTER_FACTION]) players[COOP.MONSTER_FACTION] = {};
+    players[COOP.MONSTER_FACTION]._cosmeticFaction = chosen;
+    players[COOP.MONSTER_FACTION].color = def.color;
+    players[COOP.MONSTER_FACTION].name = 'Mostri';
+}
+
+function _coopLaunch() {
+    _coopAssignRandomMonsterFaction();
+    coopState.active       = true;
+    coopState.villages     = [];
+    coopState.lairs        = [];
+    coopState.quests       = [];
+    coopState.bossSpawned  = false;
+    coopState.bossAgent    = null;
+    coopState.exitCell     = null;  // <--- Unica cella
+    coopState.exitExplored = false; // <--- Nascosta dalla nebbia
+    coopState.bossDefeated = false; // <--- Condizione di sblocco
+    coopState.playersInExit = new Set();
+    coopState.turnCount    = 0;
+    coopState.virtualLairTimer = 2;
+    coopState.monstersKilled = 0;
+    coopState.cellsExplored  = new Set();
+    coopState.lairsDestroyed = 0;
+    coopState.villagesFound  = 0;
+    coopState.bigMonstersKilled = 0;
+    coopState.totalBossesToKill = window._coopHumanPlayers; 
+    coopState.bossesDefeated = 0;
+
+    // Genera Mappa Gigante Nativamente (totalPlayers = 9 in questo momento)
+    generateProceduralMap();
+
+    _coopRepositionPlayers();
+    _coopBuildExitZone();
+    _coopPlaceVillages();
+    _coopPlaceLairs();
+    _coopInitQuests();
+
+    // Rimuovi HQ virtuali generati dalla mappa procedurale, dato che in Coop non servono
+    for (let p = 1; p <= totalPlayers; p++) {
+        if (players[p] && players[p].hq) {
+            const hqCell = grid.get(getKey(players[p].hq.q, players[p].hq.r));
+            if (hqCell) hqCell.entity = null;
+            players[p].hq = null;
+        }
+    }
+
+    startActiveGameUI(1);
+    _coopRenderHUD();
+
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner(
+            '⚔️ MODALITÀ COOP — Esplorate a Nord e sconfiggete il BOSS!',
+            '#cc00ff', { top: '60px', duration: 5000, fontSize: '16px' }
+        );
+    }
+    drawGame();
+}
+
+// ============================================================
+// LOGICA MAPPA
+// ============================================================
+
+function _coopRepositionPlayers() {
+    // Calcolo raggio per mappa gigante
+    const effectiveRadius = Math.round(GRID_RADIUS * 1.6);
+    const RR = Math.round(effectiveRadius * 0.85);
+    const spawnRow = RR - 1; // Tutti partono dal fondo (SUD)
+    let startQ = -Math.floor(spawnRow / 2);
+    let placed  = 0;
+
+    // Riposiziona SOLO i giocatori umani
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        const agents = players[p].agents;
+        if (!agents || agents.length === 0) continue;
+
+        for (const agent of agents) {
+            let bestCell = null;
+            for (let attempt = 0; attempt < 40 && !bestCell; attempt++) {
+                const tq = startQ + placed + Math.floor(attempt / 2) * (attempt % 2 === 0 ? 1 : -1);
+                const tr = spawnRow;
+                const cell = grid.get(getKey(tq, tr));
+                if (cell && cell.type === 'empty' && !cell.entity) {
+                    bestCell = cell;
+                }
+            }
+            if (bestCell) {
+                const old = grid.get(getKey(agent.q, agent.r));
+                if (old) old.entity = null;
+                placeEntityAt(agent, bestCell.q, bestCell.r);
+                placed++;
+            }
+        }
+    }
+}
+
+function _coopBuildExitZone() {
+    const effectiveRadius = Math.round(GRID_RADIUS * 1.6);
+    const RR = Math.round(effectiveRadius * 0.85);
+    
+    // Identifica la riga più a Nord della mappa
+    const topRow = -(RR - 1);
+    
+    const candidates = [];
+    grid.forEach(cell => {
+        // Seleziona solo celle vuote nella riga più settentrionale
+        if (cell.type === 'empty' && cell.r === topRow) {
+            candidates.push(cell);
+        }
+    });
+
+    // Fallback: se la riga più a nord fosse tutta occupata da muri, 
+    // prova quella subito sotto
+    if (candidates.length === 0) {
+        grid.forEach(cell => {
+            if (cell.type === 'empty' && cell.r === topRow + 1) {
+                candidates.push(cell);
+            }
+        });
+    }
+
+    shuffleArray(candidates);
+    const exit = candidates[0];
+    
+    coopState.exitCell = { q: exit.q, r: exit.r };
+    exit._coopExit = true;
+}
+
+function _coopPlaceVillages() {
+    const effectiveRadius = Math.round(GRID_RADIUS * 1.6);
+    const candidates = [];
+    
+    grid.forEach(cell => {
+        if (cell.type !== 'empty' || cell.entity || cell._coopExit) return;
+        const distFromEdge = hexDistance(cell, { q: 0, r: 0 });
+        if (distFromEdge < 3 || distFromEdge > effectiveRadius - 2) return;
+
+        let minPlayerDist = Infinity;
+        for (let p = 1; p <= window._coopHumanPlayers; p++) {
+            (players[p].agents || []).forEach(a => {
+                minPlayerDist = Math.min(minPlayerDist, hexDistance(cell, a));
+            });
+        }
+        if (minPlayerDist < COOP.VILLAGE_MIN_HQ_DIST) return;
+        candidates.push(cell);
+    });
+
+    shuffleArray(candidates);
+    const placed = [];
+    for (const cell of candidates) {
+        if (placed.length >= COOP.VILLAGE_COUNT) break;
+        if (placed.some(v => hexDistance(cell, v) < 5)) continue;
+
+        cell._coopVillage = true;
+        placed.push(cell);
+        coopState.villages.push({
+            q: cell.q, r: cell.r,
+            recruitsLeft: COOP.VILLAGE_MAX_AGENTS,
+            explored: false,
+        });
+    }
+}
+
+function _coopPlaceLairs() {
+    const effectiveRadius = Math.round(GRID_RADIUS * 1.6);
+    const candidates = [];
+    
+    grid.forEach(cell => {
+        if (cell.type !== 'empty' || cell.entity || cell._coopExit || cell._coopVillage) return;
+        const distFromCenter = hexDistance(cell, { q: 0, r: 0 });
+        if (distFromCenter < 4 || distFromCenter > effectiveRadius - 2) return;
+
+        let minPlayerDist = Infinity;
+        for (let p = 1; p <= window._coopHumanPlayers; p++) {
+            (players[p].agents || []).forEach(a => {
+                minPlayerDist = Math.min(minPlayerDist, hexDistance(cell, a));
+            });
+        }
+        if (minPlayerDist < COOP.LAIR_MIN_HQ_DIST) return;
+        candidates.push(cell);
+    });
+
+    shuffleArray(candidates);
+    const placed = [];
+    for (const cell of candidates) {
+        if (placed.length >= COOP.LAIR_COUNT) break;
+        if (placed.some(v => hexDistance(cell, v) < 4)) continue;
+
+        placed.push(cell);
+        
+        // Crea l'entità Tana
+        const lairEntity = {
+            id: crypto.randomUUID(),
+            type: 'lair', // Tipo custom, così non si muove come gli agenti
+            faction: COOP.MONSTER_FACTION,
+            sprite: '🕳️',
+            hp: 15, maxHp: 15, // Gli HP visibili sulla mappa
+            ap: 0, q: cell.q, r: cell.r,
+            _isLair: true
+        };
+        cell.entity = lairEntity;
+
+        coopState.lairs.push({
+            id: lairEntity.id,
+            q: cell.q, r: cell.r,
+            turnsUntilSpawn: COOP.LAIR_SPAWN_INTERVAL,
+            explored: false,
+        });
+
+        _coopSpawnMonsterAt(cell.q, cell.r);
+    }
+}
+
+// ============================================================
+// SPAWN E BOSS
+// ============================================================
+
+function _coopCreateMonster(baseHp) {
+    const hp  = baseHp || (COOP.MONSTER_HP_MIN + Math.floor(Math.random() * (COOP.MONSTER_HP_MAX - COOP.MONSTER_HP_MIN + 1)));
+    const dmg = COOP.MONSTER_DMG_MIN + Math.floor(Math.random() * (COOP.MONSTER_DMG_MAX - COOP.MONSTER_DMG_MIN + 1));
+    const faction = COOP.MONSTER_FACTION;
+    
+    // --- NUOVA LOGICA DINAMICA ---
+    const cosmeticId = players[COOP.MONSTER_FACTION]._cosmeticFaction || 2;
+    const fData = FACTION_PREFIXES[cosmeticId]; 
+    const slot  = Math.floor(Math.random() * fData.count) + 1;
+    const spritePool = SPRITE_POOLS[cosmeticId] || ['👾','🤖','👹'];
+
+    return {
+        id:            crypto.randomUUID(),
+        type:          'agent',
+        faction:       faction,
+        sprite:        getRandomSprite(spritePool),
+        customSpriteId: `${fData.prefix}${slot}`,
+        hp, maxHp: hp, mov: COOP.MONSTER_MOV, rng: COOP.MONSTER_RNG,
+        dmg, ap: GAME.AP_PER_TURN, q: 0, r: 0,
+        firstTurnImmune: false,
+        _isMonster: true,
+    };
+}
+
+function _coopSpawnMonsterAt(lairQ, lairR) {
+    const spawnCells = [];
+    hexDirections.forEach(dir => {
+        for (let d = 1; d <= 2; d++) {
+            const cell = grid.get(getKey(lairQ + dir.q * d, lairR + dir.r * d));
+            if (cell && cell.type === 'empty' && !cell.entity) spawnCells.push(cell);
+        }
+    });
+    
+    const lairCell = grid.get(getKey(lairQ, lairR));
+    if (lairCell && lairCell.type === 'empty' && !lairCell.entity) spawnCells.unshift(lairCell);
+
+    if (spawnCells.length === 0) return null;
+    shuffleArray(spawnCells);
+
+    const monster = _coopCreateMonster();
+    placeEntityAt(monster, spawnCells[0].q, spawnCells[0].r);
+    players[COOP.MONSTER_FACTION].agents.push(monster);
+    return monster;
+}
+
+function _coopSpawnMonsters() {
+    let activeLairs = [];
+    
+    // 1. Conta quante tane fisiche sono ancora integre
+    coopState.lairs.forEach(lair => {
+        const cell = grid.get(getKey(lair.q, lair.r));
+        if (cell && cell.entity && cell.entity._isLair) {
+            activeLairs.push(lair);
+        }
+    });
+
+    const numHumans = window._coopHumanPlayers || 1;
+    const effectiveMax = COOP.LAIR_MAX_MONSTERS_BASE + (numHumans * COOP.LAIR_MAX_MONSTERS_PER_PLAYER);
+
+    if (activeLairs.length > 0) {
+        // --- LOGICA TANE FISICHE ---
+        activeLairs.forEach(lair => {
+            const aliveNearby = players[COOP.MONSTER_FACTION].agents.filter(m =>
+                m.hp > 0 && hexDistance(m, lair) <= 5
+            ).length;
+
+            if (aliveNearby >= effectiveMax) return;
+
+            lair.turnsUntilSpawn--;
+            if (lair.turnsUntilSpawn <= 0) {
+                lair.turnsUntilSpawn = COOP.LAIR_SPAWN_INTERVAL;
+                _coopSpawnMonsterAt(lair.q, lair.r);
+            }
+        });
+    } else {
+        // --- LOGICA TANA VIRTUALE (Rinforzi Esterni) ---
+        // Si attiva solo se tutte le tane sono distrutte
+        coopState.virtualLairTimer--;
+        
+        if (coopState.virtualLairTimer <= 0) {
+            coopState.virtualLairTimer = 2; // I rinforzi arrivano ogni 2 round
+
+            const effectiveRadius = Math.round(GRID_RADIUS * 1.6);
+            const candidates = [];
+            
+            // Trova le celle libere sui bordi esterni della mappa
+            grid.forEach(cell => {
+                if (cell.type === 'empty' && !cell.entity) {
+                    const dist = hexDistance({ q: 0, r: 0 }, cell);
+                    if (dist >= effectiveRadius - 1) {
+                        candidates.push(cell);
+                    }
+                }
+            });
+
+            if (candidates.length > 0) {
+                shuffleArray(candidates);
+                // Spawna 1 o 2 mostri da punti casuali del bordo
+                const spawnCount = Math.min(candidates.length, 2);
+                for(let i=0; i<spawnCount; i++) {
+                    const monster = _coopCreateMonster();
+                    placeEntityAt(monster, candidates[i].q, candidates[i].r);
+                    players[COOP.MONSTER_FACTION].agents.push(monster);
+                }
+
+                if (typeof showNotificationBanner === 'function') {
+                    showNotificationBanner('⚠️ RILEVATI RINFORZI NEMICI AI BORDI DEL SETTORE!', '#ff8800', { duration: 4000 });
+                }
+            }
+        }
+    }
+}
+
+function _coopSpawnBoss() {
+    if (!coopState.exitCell) return;
+
+    let spawnCell = null;
+    const exitC = grid.get(getKey(coopState.exitCell.q, coopState.exitCell.r));
+    
+    if (exitC && exitC.type === 'empty' && !exitC.entity) {
+        spawnCell = exitC;
+    } else {
+        for (const dir of hexDirections) {
+            const adj = grid.get(getKey(coopState.exitCell.q + dir.q, coopState.exitCell.r + dir.r));
+            if (adj && adj.type === 'empty' && !adj.entity) {
+                spawnCell = adj; break;
+            }
+        }
+    }
+
+    if (!spawnCell) return;
+
+    // --- 1. SPAWN DEL BOSS ---
+    const baseHp = COOP.MONSTER_HP_MAX;
+    const hp     = baseHp * COOP.BOSS_HP_MULT;
+    const cosmeticId = players[COOP.MONSTER_FACTION]._cosmeticFaction || 2;
+    const fData  = FACTION_PREFIXES[cosmeticId];
+
+    const boss = {
+        id: 'coop_boss', type: 'agent', faction: COOP.MONSTER_FACTION,
+        sprite: '💀', customSpriteId: `${fData.prefix}${fData.count}`,
+        hp, maxHp: hp, mov: COOP.MONSTER_MOV * COOP.BOSS_MOV_MULT,
+        rng: COOP.MONSTER_RNG * COOP.BOSS_RNG_MULT,
+        dmg: COOP.MONSTER_DMG_MAX * COOP.BOSS_DMG_MULT,
+        ap: COOP.BOSS_AP, q: spawnCell.q, r: spawnCell.r,
+        firstTurnImmune: false, _isBoss: true, _isMonster: true,
+    };
+
+    placeEntityAt(boss, spawnCell.q, spawnCell.r);
+    players[COOP.MONSTER_FACTION].agents.push(boss);
+    coopState.bossSpawned = true;
+    coopState.bossAgent   = boss;
+
+    // --- NOTIFICA NUMERO BOSS ---
+    const bossCorrente = coopState.bossesDefeated + 1;
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner(
+            `⚠️ BOSS ${bossCorrente} di ${coopState.totalBossesToKill} RILEVATO!`,
+            '#ff0000', { top: '80px', duration: 5000, bold: true }
+        );
+    }
+
+    // --- 2. SPAWN DELLA SCORTA (4 Mostri) ---
+    let guardsSpawned = 0;
+    // Cerca tra tutte le direzioni intorno alla posizione del Boss
+    for (const dir of hexDirections) {
+        if (guardsSpawned >= 4) break; 
+
+        const nq = spawnCell.q + dir.q;
+        const nr = spawnCell.r + dir.r;
+        const adjCell = grid.get(getKey(nq, nr));
+
+        if (adjCell && adjCell.type === 'empty' && !adjCell.entity) {
+            const guard = _coopCreateMonster();
+            placeEntityAt(guard, nq, nr);
+            players[COOP.MONSTER_FACTION].agents.push(guard);
+            guardsSpawned++;
+        }
+    }
+}
+
+// ============================================================
+// SISTEMA QUEST
+// ============================================================
+
+function _coopInitQuests() {
+    const pool = shuffleArray([..._COOP_QUEST_DEFS]);
+    coopState.quests = pool.slice(0, COOP.QUEST_COUNT).map(def => ({
+        ...def, progress: 0, completed: false,
+    }));
+}
+
+function _coopUpdatePositionQuests() {
+    coopState.quests.forEach(q => {
+        if (q.completed) return;
+        if (q.type === 'position') {
+            let reached = false;
+            for (let p = 1; p <= window._coopHumanPlayers; p++) {
+                (players[p].agents || []).forEach(a => {
+                    if (hexDistance(a, { q: 0, r: 0 }) <= q.target) reached = true;
+                });
+            }
+            if (reached) _coopCompleteQuest(q);
+        }
+        if (q.type === 'explore_village') {
+            q.progress = coopState.villagesFound;
+            if (q.progress >= q.target) _coopCompleteQuest(q);
+        }
+    });
+}
+
+function _coopProgressKillQuest(monster) {
+    // Incrementa i contatori una sola volta per uccisione, fuori dal loop delle quest
+    coopState.monstersKilled++;
+    if (monster && monster.maxHp >= 5) coopState.bigMonstersKilled++;
+
+    coopState.quests.forEach(q => {
+        if (q.completed) return;
+        if (q.type === 'kill') {
+            q.progress = coopState.monstersKilled;
+            if (q.progress >= q.target) _coopCompleteQuest(q);
+        }
+        if (q.type === 'kill_big') {
+            q.progress = coopState.bigMonstersKilled;
+            if (q.progress >= q.target) _coopCompleteQuest(q);
+        }
+    });
+    _coopUpdateHUD();
+}
+
+function _coopProgressLairQuest() {
+    coopState.lairsDestroyed++;
+    coopState.quests.forEach(q => {
+        if (q.completed || q.type !== 'kill_lair') return;
+        q.progress = coopState.lairsDestroyed;
+        if (q.progress >= q.target) _coopCompleteQuest(q);
+    });
+    _coopUpdateHUD();
+}
+
+function _coopProgressExploreQuest(newCells) {
+    newCells.forEach(key => coopState.cellsExplored.add(key));
+    coopState.quests.forEach(q => {
+        if (q.completed || q.type !== 'explore') return;
+        q.progress = coopState.cellsExplored.size;
+        if (q.progress >= q.target) _coopCompleteQuest(q);
+    });
+    _coopUpdateHUD();
+}
+
+function _coopCompleteQuest(quest) {
+    quest.completed = true;
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        if (players[p] && players[p].agents && players[p].agents.length > 0) {
+            players[p].credits = (players[p].credits || 0) + quest.reward;
+        }
+    }
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner(
+            `✅ QUEST: ${quest.text}<br>+${quest.reward} crediti per tutti!`,
+            '#00ff88', { top: '70px', duration: 4000, fontSize: '15px' }
+        );
+    }
+    _coopUpdateHUD();
+}
+
+// ============================================================
+// INTERAZIONE: VILLAGGIO
+// ============================================================
+
+function _coopEnterVillage(playerFaction, agentRef) {
+    const village = coopState.villages.find(v => v.q === agentRef.q && v.r === agentRef.r);
+    if (!village) return;
+
+    if (!village.explored) {
+        village.explored = true;
+        coopState.villagesFound++;
+        if (typeof showNotificationBanner === 'function') {
+            showNotificationBanner('🏘️ Villaggio scoperto!', '#FFD700', { top: '80px', duration: 3000 });
+        }
+    }
+
+    if (village.recruitsLeft <= 0) {
+        if (typeof showTemporaryMessage === 'function') showTemporaryMessage('Villaggio vuoto.', 3000);
+        return;
+    }
+
+    const cost    = COOP.VILLAGE_RECRUIT_COST;
+    const credits = players[playerFaction].credits || 0;
+    if (credits < cost) {
+        if (typeof showTemporaryMessage === 'function') showTemporaryMessage(`Servono ${cost} cr.`, 2500);
+        return;
+    }
+
+    _coopShowRecruitPanel(playerFaction, village);
+}
+
+function _coopGetDeadAllies(myFaction) {
+    const dead = [];
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        if (p === myFaction) continue;
+        const agents = players[p].agents || [];
+        const alive = agents.filter(a => a.hp > 0).length;
+        if (alive === 0) dead.push(p);
+    }
+    return dead;
+}
+
+function _coopShowRecruitPanel(faction, village) {
+    const existing = document.getElementById('coop-recruit-panel');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'coop-recruit-panel';
+    panel.style.cssText = `
+        position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        background:rgba(5,5,15,0.97); border:2px solid #FFD700;
+        border-radius:10px; padding:24px; z-index:20000;
+        font-family:'Courier New',monospace; color:#fff; text-align:center;
+        min-width:280px; box-shadow:0 0 30px #FFD70066;
+    `;
+
+    const fData = FACTION_PREFIXES[players[faction]._cosmeticFaction ?? faction];
+    const tmpAgent = {
+        id: crypto.randomUUID(), type: 'agent', faction,
+        sprite: getRandomSprite(SPRITE_POOLS[players[faction]._cosmeticFaction ?? faction]),
+        customSpriteId: `${fData.prefix}1`,
+        hp: 1, maxHp: 1, mov: 1, rng: 1, dmg: 1, ap: GAME.AP_PER_TURN, q: 0, r: 0,
+    };
+
+    let extraPoints = 0;
+    const renderStats = () => {
+        const statsHtml = `
+            <div style="display:flex;gap:8px;justify-content:center;margin:12px 0;">
+                ${['hp','mov','rng','dmg'].map(s => `
+                    <div style="text-align:center;">
+                        <div style="color:#aaa;font-size:11px;">${s.toUpperCase()}</div>
+                        <button onclick="window._coopRecAdjust('${s}',-1)" style="padding:2px 6px;background:#333;border:1px solid #555;color:#fff;cursor:pointer;">-</button>
+                        <span id="coop-stat-${s}" style="display:inline-block;width:20px;text-align:center;">${tmpAgent[s]}</span>
+                        <button onclick="window._coopRecAdjust('${s}',1)" style="padding:2px 6px;background:#333;border:1px solid #555;color:#fff;cursor:pointer;">+</button>
+                    </div>
+                `).join('')}
+            </div>
+            <div style="color:#FFD700;font-size:13px;">Punti extra: <b id="coop-extra-pts">${extraPoints}</b></div>
+            <div style="color:#aaa;font-size:12px;">Costo totale: <b style="color:#fff">${COOP.VILLAGE_RECRUIT_COST + extraPoints} cr</b></div>
+        `;
+        document.getElementById('coop-recruit-stats').innerHTML = statsHtml;
+    };
+
+    window._coopRecAdjust = function(stat, delta) {
+        const maxes = { hp: 6, mov: 4, rng: 8, dmg: 5 };
+        const newVal = tmpAgent[stat] + delta;
+        if (newVal < 1 || newVal > maxes[stat]) return;
+
+        const totalCredits = players[faction].credits || 0;
+        const totalCost    = COOP.VILLAGE_RECRUIT_COST + extraPoints + delta;
+        if (delta > 0 && totalCost > totalCredits) {
+            showTemporaryMessage('Crediti insufficienti!', 1500); return;
+        }
+        if (delta < 0 && extraPoints + delta < 0) return;
+
+        tmpAgent[stat]  += delta;
+        if (stat === 'hp') tmpAgent.maxHp = tmpAgent.hp;
+        extraPoints     += delta;
+        renderStats();
+    };
+
+    // --- NUOVO: SEZIONE RESURREZIONE ALLEATI ---
+    const deadAllies = _coopGetDeadAllies(faction);
+    let reviveHtml = '';
+    if (deadAllies.length > 0) {
+        reviveHtml = `
+            <div style="margin-top:15px; border-top:1px solid #555; padding-top:12px;">
+                <h4 style="color:#00ff88; margin:0 0 10px; font-size:14px; text-transform:uppercase;">⚰️ Resurrezione Alleati</h4>
+                <div style="font-size:11px; color:#aaa; margin-bottom:8px;">(Costo fisso: 10 cr)</div>
+                ${deadAllies.map(dp => `
+                    <button onclick="window._coopRequestRevive(${faction}, ${dp}, ${village.q}, ${village.r})"
+                            style="padding:8px 12px; border:2px solid ${players[dp].color}; color:${players[dp].color}; background:rgba(0,0,0,0.5); cursor:pointer; width:100%; margin-bottom:6px; font-weight:bold; border-radius:4px;">
+                        SALVA ${players[dp].name.toUpperCase()}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    panel.innerHTML = `
+        <h3 style="color:#FFD700;margin:0 0 8px;font-size:18px;">🏘️ Villaggio</h3>
+        <p style="color:#aaa;font-size:13px;margin:0 0 10px;">Reclute base rimaste: <b>${village.recruitsLeft}</b></p>
+        <div id="coop-recruit-stats"></div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">
+            <button onclick="window._coopRequestRecruit(${faction}, ${village.q}, ${village.r})" style="padding:10px 20px;border:2px solid #00ff88;color:#00ff88;background:rgba(0,255,136,0.1);cursor:pointer;font-weight:bold;border-radius:4px;">✅ RECLUTA</button>
+            <button onclick="document.getElementById('coop-recruit-panel').remove()" style="padding:10px 20px;border:2px solid #ff3333;color:#ff3333;background:rgba(255,51,51,0.1);cursor:pointer;border-radius:4px;">✖ ANNULLA</button>
+        </div>
+        ${reviveHtml}
+    `;
+    document.body.appendChild(panel);
+    renderStats();
+
+    // Funzione chiamata dal bottone per il reclutamento standard
+    window._coopRequestRecruit = function(pFaction, vq, vr) {
+        const totalCost = COOP.VILLAGE_RECRUIT_COST + extraPoints;
+        if ((players[pFaction].credits || 0) < totalCost) {
+            showTemporaryMessage('Crediti insufficienti!', 2000); return;
+        }
+        
+        const agentData = Object.assign({}, tmpAgent, {
+            id: crypto.randomUUID(), ap: GAME.AP_PER_TURN, firstTurnImmune: true,
+        });
+
+        document.getElementById('coop-recruit-panel').remove();
+
+        if (isOnline && !isHost) {
+            sendOnlineMessage({ type: 'COOP_RECRUIT_REQ', faction: pFaction, agent: agentData, cost: totalCost, vq, vr });
+        } else {
+            _coopApplyRecruit(pFaction, agentData, totalCost, vq, vr);
+        }
+    };
+
+    // Funzione chiamata dal bottone per la Resurrezione
+    window._coopRequestRevive = function(reviverFaction, deadFaction, vq, vr) {
+        if ((players[reviverFaction].credits || 0) < 10) {
+            showTemporaryMessage('Crediti insufficienti (servono 10 cr)!', 2000); return;
+        }
+
+        document.getElementById('coop-recruit-panel').remove();
+
+        if (isOnline && !isHost) {
+            sendOnlineMessage({ type: 'COOP_REVIVE_REQ', reviverFaction, deadFaction, vq, vr });
+        } else {
+            _coopApplyRevive(reviverFaction, deadFaction, vq, vr);
+        }
+    };
+}
+
+// Applica il reclutamento e sincronizza la rete
+function _coopApplyRecruit(faction, agentData, cost, vq, vr) {
+    const village = coopState.villages.find(v => v.q === vq && v.r === vr);
+    if (!village) return;
+
+    players[faction].credits -= cost;
+    village.recruitsLeft--;
+
+    const activeAgent = selectedAgent;
+    let spawnCell = null;
+    hexDirections.forEach(dir => {
+        if (spawnCell) return;
+        const c = grid.get(getKey((activeAgent?.q || vq) + dir.q, (activeAgent?.r || vr) + dir.r));
+        if (c && c.type === 'empty' && !c.entity) spawnCell = c;
+    });
+
+    if (!spawnCell) { 
+        players[faction].credits += cost; 
+        village.recruitsLeft++;
+        showTemporaryMessage('Nessuna cella libera attorno al villaggio!', 2500); 
+        return; 
+    }
+
+    agentData.q = spawnCell.q;
+    agentData.r = spawnCell.r;
+    placeEntityAt(agentData, spawnCell.q, spawnCell.r);
+    players[faction].agents.push(agentData);
+
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner('🪖 Nuova recluta unita al gruppo!', players[faction].color, { top: '80px', duration: 3000 });
+    }
+    drawGame();
+    _coopUpdateHUD();
+    updateUI();
+
+    if (isOnline && isHost) {
+        broadcastToClients({ type: 'COOP_RECRUIT_SYNC', faction, agent: agentData, cost, vq, vr });
+    }
+}
+
+// Applica la resurrezione e sincronizza la rete
+function _coopApplyRevive(reviverFaction, deadFaction, vq, vr) {
+    players[reviverFaction].credits -= 10;
+
+    let spawnCell = null;
+    hexDirections.forEach(dir => {
+        if (spawnCell) return;
+        const c = grid.get(getKey(vq + dir.q, vr + dir.r));
+        if (c && c.type === 'empty' && !c.entity) spawnCell = c;
+    });
+
+    if (!spawnCell) {
+        players[reviverFaction].credits += 10;
+        showTemporaryMessage('Nessuna cella libera attorno al villaggio!', 2500);
+        return;
+    }
+
+    // Crea un agente decente (3 HP, 2 Passi, 3 Tiro, 2 Danno) per il giocatore resuscitato
+    const fData = FACTION_PREFIXES[players[deadFaction]._cosmeticFaction || deadFaction];
+    const newAgent = {
+        id: crypto.randomUUID(), type: 'agent', faction: deadFaction,
+        sprite: getRandomSprite(SPRITE_POOLS[players[deadFaction]._cosmeticFaction || deadFaction]),
+        customSpriteId: `${fData.prefix}1`,
+        hp: 3, maxHp: 3, mov: 2, rng: 3, dmg: 2, ap: GAME.AP_PER_TURN, q: spawnCell.q, r: spawnCell.r,
+        firstTurnImmune: true
+    };
+
+    placeEntityAt(newAgent, spawnCell.q, spawnCell.r);
+    players[deadFaction].agents.push(newAgent);
+
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner(`✨ ${players[deadFaction].name.toUpperCase()} È TORNATO IN VITA!`, players[deadFaction].color, { top: '80px', duration: 5000, fontSize: '18px' });
+    }
+    if (typeof playSFX === 'function') playSFX('heal');
+
+    drawGame();
+    updateUI();
+
+    if (isOnline && isHost) {
+        broadcastToClients({ type: 'COOP_REVIVE_SYNC', reviverFaction, deadFaction, agent: newAgent });
+    }
+}
+
+// ============================================================
+// NEBBIA E DISEGNI (draw hooks)
+// ============================================================
+
+function _coopDrawFog() {
+    if (!ctx || !grid) return;
+    const visible = new Set();
+    const newlyRevealed = [];
+
+    // Consideriamo la vista di tutti gli agenti umani
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        (players[p].agents || []).forEach(agent => {
+            if (agent.hp <= 0) return;
+            // La visuale dell'agente è uguale alla sua gittata + 1
+            const range = agent.rng + 1;
+            grid.forEach(cell => {
+                if (hexDistance(agent, cell) <= range) {
+                    const key = getKey(cell.q, cell.r);
+                    if (!visible.has(key) && !coopState.cellsExplored.has(key)) newlyRevealed.push(key);
+                    visible.add(key);
+                }
+            });
+        });
+    }
+
+    if (newlyRevealed.length > 0) _coopProgressExploreQuest(newlyRevealed);
+    _coopCheckRevealSpecials(visible);
+
+    ctx.save();
+    grid.forEach(cell => {
+        const key = getKey(cell.q, cell.r);
+        if (!visible.has(key)) {
+            const p = hexToPixel(cell.q, cell.r);
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i + Math.PI / 6;
+                const x = p.x + (HEX_SIZE + 1) * Math.cos(angle);
+                const y = p.y + (HEX_SIZE + 1) * Math.sin(angle);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = `rgba(0, 0, 0, ${COOP.FOG_ALPHA})`;
+            ctx.fill();
+        }
+    });
+    ctx.restore();
+}
+
+function _coopCheckRevealSpecials(visibleSet) {
+    // Svela l'uscita e fa spawnare il Boss
+    if (!coopState.exitExplored && coopState.exitCell) {
+        const exitKey = getKey(coopState.exitCell.q, coopState.exitCell.r);
+        if (visibleSet.has(exitKey)) {
+            coopState.exitExplored = true;
+            
+            // IL BOSS APPARE ORA!
+            _coopSpawnBoss();
+            
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner('🚪 Via di fuga individuata! ATTENZIONE AL BOSS!', '#ff3333', { top: '80px', duration: 5000 });
+            }
+            
+            // Fai rumore per segnalare l'arrivo del boss
+            if (typeof playSFX === 'function') playSFX('explosion');
+        }
+    }
+
+    coopState.villages.forEach(v => {
+        if (!v.explored && visibleSet.has(getKey(v.q, v.r))) {
+            v.explored = true;
+            coopState.villagesFound++;
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner('🏘️ Villaggio scoperto nelle vicinanze!', '#FFD700', { top: '80px', duration: 3000 });
+            }
+            _coopUpdateHUD();
+        }
+    });
+
+    coopState.lairs.forEach(l => {
+        if (!l.explored && !l.destroyed && visibleSet.has(getKey(l.q, l.r))) {
+            l.explored = true;
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner('⚠️ Tana di mostri rilevata!', players[COOP.MONSTER_FACTION].color, { top: '80px', duration: 3000 });
+            }
+        }
+    });
+}
+
+function _coopDrawSpecialCells() {
+    if (!ctx) return;
+    ctx.save();
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (coopState.exitCell && coopState.exitExplored) {
+        const p = hexToPixel(coopState.exitCell.q, coopState.exitCell.r);
+        // Se il boss è vivo è grigia/rossa, se è morto diventa dorata
+        const color = coopState.bossDefeated ? 'rgba(255, 215, 0, 0.8)' : 'rgba(150, 150, 150, 0.5)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = 3;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const x = p.x + HEX_SIZE * Math.cos(angle);
+            const y = p.y + HEX_SIZE * Math.sin(angle);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font      = `${Math.round(HEX_SIZE * 0.7)}px Arial`;
+        ctx.fillText(coopState.bossDefeated ? '🚪' : '🔒', p.x, p.y);
+    }
+
+    coopState.villages.forEach(v => {
+        const key = getKey(v.q, v.r);
+        const cell = grid.get(key);
+        if (!cell || !v.explored) return;
+        const p = hexToPixel(cell.q, cell.r);
+        ctx.font = `${Math.round(HEX_SIZE * 0.7)}px Arial`;
+        ctx.fillText(v.recruitsLeft > 0 ? '🏘️' : '🏚️', p.x, p.y + HEX_SIZE * 0.05);
+    });
+
+    if (coopState.bossAgent && coopState.bossAgent.hp > 0) {
+        const b   = coopState.bossAgent;
+        const bp  = hexToPixel(b.q, b.r);
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+        // Ridotta dimensione da 1.1 a 0.8
+        ctx.font      = `${Math.round(HEX_SIZE * 0.8)}px Arial`; 
+        ctx.globalAlpha = 0.6 + 0.4 * pulse;
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur  = 15 * pulse;
+        // Spostata da -0.5 (alto) a +0.4 (basso)
+        ctx.fillText('💀', bp.x, bp.y + HEX_SIZE * 0.4); 
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur  = 0;
+    }
+    ctx.restore();
+}
+
+// ============================================================
+// VITTORIA / SCONFITTA
+// ============================================================
+
+function _coopCheckExitVictory() {
+    // La vittoria scatta SOLO se il boss è stato sconfitto
+    if (!coopState.active || !coopState.bossDefeated || !coopState.exitCell) return;
+    
+    coopState.playersInExit.clear();
+
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        const agents = (players[p].agents || []).filter(a => a.hp > 0);
+        agents.forEach(a => {
+            // Conta come "nell'uscita" se è sopra la cella O adiacente (distanza <= 1)
+            if (hexDistance(a, coopState.exitCell) <= 1) {
+                coopState.playersInExit.add(p);
+            }
+        });
+    }
+
+    const activePlayers = [];
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        if ((players[p].agents || []).some(a => a.hp > 0)) activePlayers.push(p);
+    }
+
+    const allReached = activePlayers.length > 0 && activePlayers.every(p => coopState.playersInExit.has(p));
+    if (allReached) _coopVictory('Tutti i giocatori hanno raggiunto la via di fuga!');
+}
+
+function _coopBossDefeated(killerFaction) {
+    coopState.bossAgent = null;
+    coopState.bossDefeated = true; // Sblocca la porta!
+
+    for (let p = 1; p <= window._coopHumanPlayers; p++) {
+        if (players[p] && players[p].agents && players[p].agents.length > 0) {
+            players[p].credits = (players[p].credits || 0) + COOP.BOSS_REWARD;
+        }
+    }
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner(
+            `💀 BOSS SCONFITTO!<br>Via di fuga sbloccata!`,
+            '#FFD700', { top: '50px', duration: 6000, fontSize: '20px' }
+        );
+    }
+    // Rimossa la vittoria immediata (setTimeout(() => _coopVictory...))
+}
+
+function _coopVictory(reason) {
+    coopState.active = false;
+    if (typeof showGameOverlay === 'function') showGameOverlay('MISSIONE COMPLETATA! 🏆', reason, '#FFD700');
+    state = 'GAME_OVER';
+}
+
+function _coopDefeat() {
+    coopState.active = false;
+    if (typeof showGameOverlay === 'function') showGameOverlay('MISSIONE FALLITA', 'Tutti gli agenti umani sono stati eliminati.', '#ff3333');
+    state = 'GAME_OVER';
+}
+
+// ============================================================
+// HUD COOP
+// ============================================================
+
+function _coopRenderHUD() {
+    // Rimuove vecchi elementi se esistono
+    document.getElementById('coop-hud')?.remove();
+    document.getElementById('coop-hud-btn')?.remove();
+
+    // 1. Crea il Pulsante Toggle (Posizionato sotto al tasto RESA)
+    const btn = document.createElement('button');
+    btn.id = 'coop-hud-btn';
+    btn.innerHTML = '📜 COOP';
+    btn.style.cssText = `
+        position: fixed; 
+        top: 45px; /* Sotto al tasto RESA (che è a top: 5px) */
+        right: 5px; 
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.8); 
+        border: 2px solid #cc00ff; 
+        color: #cc00ff;
+        padding: 8px 12px; 
+        border-radius: 4px; 
+        font-size: 14px;
+        font-family: 'Courier New', monospace; 
+        cursor: pointer; 
+        font-weight: bold;
+        transition: all 0.3s;
+    `;
+    document.body.appendChild(btn);
+
+    // 2. Crea il Pannello (Posizionato sotto al pulsante)
+    const hud = document.createElement('div');
+    hud.id = 'coop-hud';
+    hud.style.cssText = `
+        position: fixed; 
+        top: 85px; /* Subito sotto al nuovo pulsante */
+        right: 5px; 
+        z-index: 5000;
+        background: rgba(5,5,15,0.88); 
+        border: 1px solid #cc00ff;
+        border-radius: 8px; 
+        padding: 12px 14px; 
+        font-family: 'Courier New', monospace;
+        color: #fff; 
+        font-size: 12px; 
+        min-width: 200px; 
+        max-width: 240px;
+        box-shadow: 0 0 15px #cc00ff44; 
+        pointer-events: none; /* Lascia passare i click verso la mappa */
+        display: block; /* Parte visibile, il giocatore può chiuderlo */
+    `;
+    document.body.appendChild(hud);
+
+    // 3. Logica Toggle: Apre/Chiude il pannello al click
+    btn.onclick = () => {
+        const isHidden = hud.style.display === 'none';
+        hud.style.display = isHidden ? 'block' : 'none';
+        // Effetto visivo sul pulsante quando il menu è aperto
+        btn.style.background = isHidden ? 'rgba(204, 0, 255, 0.2)' : 'rgba(0, 0, 0, 0.8)';
+        if (typeof playSFX === 'function') playSFX('click');
+    };
+
+    // Popola subito i dati nel pannello
+    _coopUpdateHUD();
+}
+
+function _coopUpdateHUD() {
+    const hud = document.getElementById('coop-hud');
+    if (!hud || !coopState.active) return;
+
+    const questsHTML = coopState.quests.map(q => `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+             margin-bottom:4px;padding:3px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">
+            <span style="color:${q.completed ? '#00ff88' : '#aaa'};font-size:11px;">
+                ${q.completed ? '✅' : '⬜'} ${q.text}
+            </span>
+            <span style="color:#FFD700;font-size:10px;white-space:nowrap;margin-left:6px;">
+                ${q.completed ? 'FATTO' : `${q.progress}/${q.target}`}
+            </span>
+        </div>
+    `).join('');
+
+    const bossHP = coopState.bossAgent
+        ? `<div style="margin-bottom:8px;padding:6px;background:rgba(255,0,0,0.08);border-radius:4px;border:1px solid #ff3333;">
+              💀 <span style="color:#ff3333;font-weight:bold;">BOSS:</span>
+              <span style="color:#fff;">${coopState.bossAgent.hp}/${coopState.bossAgent.maxHp} HP</span>
+           </div>`
+        : '';
+
+    const villagesHTML = `🏘️ Villaggi: <b>${coopState.villagesFound}/${COOP.VILLAGE_COUNT}</b>`;
+    const bossProgressHTML = `💀 Boss: <b style="color:#ff3333">${coopState.bossesDefeated}/${coopState.totalBossesToKill}</b>`;
+    const monstersHTML = `👾 Kill: <b>${coopState.monstersKilled}</b>`;
+
+    hud.innerHTML = `
+        <div style="color:#cc00ff;font-weight:bold;margin-bottom:8px;font-size:13px;
+             text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333;padding-bottom:6px;">
+            ⚔️ MISSIONE COOP
+        </div>
+        ${bossHP}
+        <div style="margin-bottom:8px;color:#aaa;font-size:11px;">
+            ${bossProgressHTML} 
+        </div>
+        <div style="margin-bottom:8px;color:#aaa;font-size:11px;">
+            ${monstersHTML} &nbsp;|&nbsp; ${villagesHTML}
+        </div>
+        <div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">
+            Quest attive
+        </div>
+        ${questsHTML}
+        <div style="margin-top:8px;color:#FFD700;font-size:11px;border-top:1px solid #333;padding-top:6px;line-height:1.3;">
+            ${coopState.bossDefeated ? '🚪 <b>FUGGITE!</b> Riunitevi all\'uscita!' : '🔒 <b>Obiettivo:</b> Trova l\'uscita e sconfiggi il Boss per aprirla!'}
+        </div>
+    `;
+}
+
+// ============================================================
+// MENU LOCALE (Iniezione Bottone)
+// ============================================================
+
+function showCoopMenu() {
+    const localOpts = document.getElementById('local-options');
+    if (!localOpts) return;
+    if (document.getElementById('coop-menu-block')) return;
+
+    const block = document.createElement('div');
+    block.id = 'coop-menu-block';
+    block.style.cssText = 'margin-top:15px; text-align:center;';
+    block.innerHTML = `
+        <div style="border-top:1px solid #333; padding-top:15px; margin-top:5px;">
+            <p style="color:#a0a0b0; margin-bottom:10px; font-size:13px; text-transform:uppercase; letter-spacing:1px;">
+                cooperativa — numero giocatori
+            </p>
+            <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                ${[1,2,3,4].map(n => `
+                    <button class="action-btn" onclick="startCoopGame(${n})"
+                        style="padding:10px 18px; border:2px solid #cc00ff; color:#cc00ff; background:transparent; cursor:pointer;">
+                        ${n}P COOP
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    localOpts.appendChild(block);
+}
+
+(function _patchShowLocalMenu() {
+    const _origShowLocal = window.showLocalMenu;
+    if (!_origShowLocal) return;
+    window.showLocalMenu = function () {
+        _origShowLocal();
+        showCoopMenu();
+    };
+})();
+
+// ============================================================
+// MODALITÀ COOP ONLINE
+// ============================================================
+
+/**
+ * Chiamata dall'host quando preme "AVVIA COOP".
+ * Replica hostStartGame() ma segna totalPlayers = 9 (fazione mostri)
+ * e aggiunge la fazione 9 come AI online.
+ */
+function hostStartOnlineCoop() {
+    if (!window.isHost || !window.isOnline) return;
+
+    const numHumans = window.onlineTotalPlayers;
+    window._coopHumanPlayers = numHumans;
+
+    // 1. Avvisa i client: faranno setup coop
+    broadcastToClients({ type: 'COOP_ONLINE_START', numHumanPlayers: numHumans });
+
+    // 2. Imposta totalPlayers=9 e registra F9 come AI
+    if (!window.onlineAIFactions) window.onlineAIFactions = new Set();
+    window.onlineAIFactions.add(COOP.MONSTER_FACTION);
+    onlineAIFactions.add(COOP.MONSTER_FACTION);   // ← aggiunge anche alla variabile locale usata da isHostAITurn()
+    window.onlineTotalPlayers = COOP.MONSTER_FACTION;
+    totalPlayers  = COOP.MONSTER_FACTION;
+    currentPlayer = 1;
+
+    // 3. Reset giocatori e inizializza slot mostri
+    resetPlayers();
+    players[COOP.MONSTER_FACTION] = {
+        hq: null, agents: [], color: COLORS.p2,
+        name: 'Mostri', credits: 0, _cosmeticFaction: 2, cards: [],
+    };
+
+    // 4. Registra hook coop
+    coopState.active = false;
+    _coopRegisterHooks();
+
+    // Neutralizza tryHostStart durante la coop: i SETUP_DONE dei client
+    // aggiornano playersReady ma non devono avviare il flusso normale.
+    window._origTryHostStart = window.tryHostStart;
+    window.tryHostStart = function() {};  // no-op durante il setup coop
+
+    // 5. Patcha confirmPlayerSetup: l'host fa il suo setup,
+    //    poi aspetta i SETUP_DONE dei client via polling su playersReady.
+    window._origConfirmPlayerSetup = window.confirmPlayerSetup;
+    window.confirmPlayerSetup = function() {
+        playSFX('click');
+        if (setupData.agents.length === 0) { alert('Devi reclutare almeno un agente.'); return; }
+
+        players[1].agents    = JSON.parse(JSON.stringify(setupData.agents));
+        players[1].cards     = typeof getFinalCardSelection === 'function' ? getFinalCardSelection() : [];
+        players[1].usedCards = {};
+        players[1].credits   = COOP.STARTING_CREDITS;
+
+        window.confirmPlayerSetup = window._origConfirmPlayerSetup;
+        window.tryHostStart = window._origTryHostStart; // ripristina
+
+        // Schermata attesa per gli altri client
+        document.getElementById('setup-overlay').style.display = 'none';
+        let waitDiv = document.getElementById('coop-host-wait');
+        if (!waitDiv) {
+            waitDiv = document.createElement('div');
+            waitDiv.id = 'coop-host-wait';
+            waitDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#cc00ff;font-family:Courier New,monospace;font-size:1.4em;text-align:center;z-index:5000;';
+            waitDiv.innerHTML = '👾 Setup inviato!<br><span style="font-size:0.7em;color:#aaa;">In attesa degli altri giocatori...</span>';
+            document.body.appendChild(waitDiv);
+        }
+
+        // Polling: aspetta SETUP_DONE da tutti i client (slot 2..numHumans)
+        const waitForClients = setInterval(() => {
+            for (let p = 2; p <= numHumans; p++) {
+                if (!playersReady[p]) return;
+            }
+            clearInterval(waitForClients);
+            document.getElementById('coop-host-wait')?.remove();
+
+            // Applica agenti di tutti i client dal buffer
+            for (const [p, agents] of Object.entries(clientSetupBuffer || {})) {
+                const pNum = parseInt(p);
+                if (pNum >= 2 && pNum <= numHumans && players[pNum]) {
+                    players[pNum].agents    = agents;
+                    players[pNum].credits   = COOP.STARTING_CREDITS;
+                    players[pNum].usedCards = {};
+                }
+            }
+
+            _coopLaunchOnline();
+        }, 300);
+    };
+
+    // 6. Mostra setup host
+    document.getElementById('network-menu').style.display = 'none';
+    setupData = { points: COOP.STARTING_CREDITS, agents: [] };
+    updateSetupUI();
+}
+
+
+/**
+ * Versione online di _coopLaunch:
+ * genera la mappa coop, poi invia GAME_STATE + COOP_STATE_SYNC ai client.
+ */
+function _coopLaunchOnline() {
+    // Reset stato coop
+    _coopAssignRandomMonsterFaction();
+    coopState.active        = true;
+    coopState.villages      = [];
+    coopState.lairs         = [];
+    coopState.quests        = [];
+    coopState.bossSpawned   = false;
+    coopState.bossAgent     = null;
+    coopState.exitCell      = null;
+    coopState.exitExplored  = false;
+    coopState.bossDefeated  = false;
+    coopState.playersInExit = new Set();
+    coopState.turnCount     = 0;
+    coopState.virtualLairTimer   = 2;
+    coopState.monstersKilled     = 0;
+    coopState.cellsExplored      = new Set();
+    coopState.lairsDestroyed     = 0;
+    coopState.villagesFound      = 0;
+    coopState.bigMonstersKilled  = 0;
+    coopState.stealthKills       = 0;
+    coopState.villageRecruits    = 0;
+    coopState.healsPerformed     = 0;
+    coopState.killsThisTurn      = 0;
+    coopState.pacifistRounds     = 0;
+    coopState.monsterKilledThisRound = false;
+    coopState.guardianKills      = 0;
+    coopState.totalBossesToKill = window._coopHumanPlayers; 
+    coopState.bossesDefeated = 0;
+
+    // Genera la mappa procedurale grande (totalPlayers = 9 → mappa gigante)
+    generateProceduralMap();
+    _coopRepositionPlayers();
+    _coopBuildExitZone();
+    _coopPlaceVillages();
+    _coopPlaceLairs();
+    _coopInitQuests();
+
+    // Rimuovi HQ virtuali
+    for (let p = 1; p <= totalPlayers; p++) {
+        if (players[p] && players[p].hq) {
+            const hqCell = grid.get(getKey(players[p].hq.q, players[p].hq.r));
+            if (hqCell) hqCell.entity = null;
+            players[p].hq = null;
+        }
+    }
+
+    // --- Costruisce e invia GAME_STATE (come tryHostStart normale) ---
+    const startingPlayer = 1; // In coop inizia sempre P1
+    const walls = [], terrains = [];
+    grid.forEach(cell => {
+        if (cell.type === 'wall' || cell.type === 'barricade' || cell.type === 'water') {
+            walls.push({ q: cell.q, r: cell.r, type: cell.type,
+                hp: cell.hp, maxHp: cell.maxHp,
+                sprite: cell.sprite, customSpriteId: cell.customSpriteId });
+        }
+        if (cell.terrain) terrains.push({ q: cell.q, r: cell.r, terrain: cell.terrain });
+    });
+
+    const playersSnapshot = {};
+    for (let p = 1; p <= totalPlayers; p++) {
+        playersSnapshot[p] = {
+            ...players[p],
+            color:            players[p].color,
+            name:             players[p].name,
+            _cosmeticFaction: players[p]._cosmeticFaction ?? p,
+        };
+    }
+    const playerCards = {};
+    for (let p = 1; p <= totalPlayers; p++) playerCards[p] = players[p].cards || [];
+
+    // Serializza lo stato coop per i client
+    const coopSnapshot = _coopSerializeState();
+
+    broadcastToClients({
+        type: 'GAME_STATE',
+        state: {
+            themeId:           SELECTED_BG_ID,
+            walls, terrains,
+            players:           playersSnapshot,
+            totalPlayers:      totalPlayers,
+            startingPlayer,
+            firstPlayerOfGame: startingPlayer,
+            onlineAIFactions:  Array.from(window.onlineAIFactions),
+            playerCards,
+            controlPoints:     Array.from(controlPoints.values()),
+            // Payload coop aggiuntivo
+            isCoopMode:        true,
+            coopSnapshot,
+            coopHumanPlayers:  window._coopHumanPlayers,
+        },
+    });
+
+    // Avvia localmente
+    startActiveGameUI(startingPlayer);
+    _coopRenderHUD();
+    if (typeof updateIngameCardsUI === 'function') updateIngameCardsUI();
+
+    if (typeof showNotificationBanner === 'function') {
+        showNotificationBanner('⚔️ MODALITÀ COOP ONLINE — Esplorate a Nord e sconfiggete il BOSS!',
+            '#cc00ff', { top: '60px', duration: 5000, fontSize: '16px' });
+    }
+    drawGame();
+}
+
+/**
+ * Serializza lo stato coop (celle speciali + quest) da inviare ai client.
+ */
+function _coopSerializeState() {
+    // Le lairs serializzate includono il flag _isLair sull'entità
+    // ma le celle della griglia vengono già trasmesse come walls/entities nel GAME_STATE.
+    // Qui serializziamo solo i metadati coop puri.
+    return {
+        villages:      coopState.villages,
+        lairs:         coopState.lairs.map(l => ({ q: l.q, r: l.r, destroyed: l.destroyed || false, turnsUntilSpawn: l.turnsUntilSpawn })),
+        exitCell:      coopState.exitCell,
+        quests:        coopState.quests,
+        bossDefeated:  coopState.bossDefeated,
+        monstersKilled: coopState.monstersKilled,
+        villagesFound: coopState.villagesFound,
+        turnCount:     coopState.turnCount,
+    };
+}
+
+/**
+ * Applica il payload coop ricevuto nel GAME_STATE (lato client).
+ * Chiamata dopo receiveGameState() ma prima di startActiveGameUI().
+ */
+function _coopApplySnapshot(snapshot, numHumanPlayers) {
+    if (!snapshot) return;
+
+    window._coopHumanPlayers = numHumanPlayers;
+
+    coopState.active        = true;
+    coopState.villages      = snapshot.villages      || [];
+    coopState.lairs         = snapshot.lairs         || [];
+    coopState.exitCell      = snapshot.exitCell      || null;
+    coopState.quests        = snapshot.quests        || [];
+    coopState.bossDefeated  = snapshot.bossDefeated  || false;
+    coopState.monstersKilled = snapshot.monstersKilled || 0;
+    coopState.villagesFound = snapshot.villagesFound  || 0;
+    coopState.turnCount     = snapshot.turnCount      || 0;
+    coopState.bossSpawned   = false;
+    coopState.bossAgent     = null;
+    coopState.playersInExit = new Set();
+
+    // Ricostruisce i flag sulle celle della griglia
+    if (coopState.exitCell) {
+        const c = grid.get(getKey(coopState.exitCell.q, coopState.exitCell.r));
+        if (c) c._coopExit = true;
+    }
+    coopState.villages.forEach(v => {
+        const c = grid.get(getKey(v.q, v.r));
+        if (c) c._coopVillage = true;
+    });
+    coopState.lairs.forEach(l => {
+        if (l.destroyed) return;
+        const c = grid.get(getKey(l.q, l.r));
+        if (c) c._coopLair = true;
+    });
+
+    // Il boss potrebbe essere già presente come agente nella fazione 9
+    const bossAgent = (players[COOP.MONSTER_FACTION]?.agents || []).find(a => a._isBoss);
+    if (bossAgent) {
+        coopState.bossAgent   = bossAgent;
+        coopState.bossSpawned = true;
+    }
+
+    // Registra gli hook coop sul client
+    _coopRegisterHooks();
+    _coopRenderHUD();
+    _coopUpdateHUD();
+    if (typeof updateIngameCardsUI === 'function') updateIngameCardsUI();
+}
+
+// ============================================================
+// INTERCETTA GAME_STATE SUL CLIENT PER ATTIVARE LA COOP
+// ============================================================
+
+// Patcha handleClientReceivedData per intercettare GAME_STATE con isCoopMode
+(function _installCoopGameStateHook() {
+    // Aspettiamo che la funzione esista (è in network_sync.js, caricato prima)
+    setTimeout(function() {
+        if (typeof registerClientMessageHandler !== 'function') return;
+
+        // Intercettiamo COOP_ONLINE_START: il client sa che arriverà una partita coop
+        registerClientMessageHandler('COOP_ONLINE_START', function(data) {
+            window._pendingCoopHumanPlayers = data.numHumanPlayers;
+            document.getElementById('online-color-picker')?.remove();
+            document.getElementById('network-menu').style.display = 'none';
+            setupData = { points: COOP.STARTING_CREDITS, agents: [] };
+            updateSetupUI();
+        });
+
+        // Patchiamo _applyFullStateSync (già definita in network_sync.js) per
+        // riattivare la coop in caso di resync durante la partita
+        const _origApplyFull = window._applyFullStateSync;
+        if (_origApplyFull) {
+            window._applyFullStateSync = function(st) {
+                _origApplyFull(st);
+                if (st && st.isCoopMode && st.coopSnapshot && !coopState.active) {
+                    _coopApplySnapshot(st.coopSnapshot, st.coopHumanPlayers || window._coopHumanPlayers || 1);
+                }
+            };
+        }
+    }, 600);
+})();
+
+// Patcha receiveGameState (in map.js) per intercettare GAME_STATE con isCoopMode
+(function _installCoopReceiveGameStateHook() {
+    setTimeout(function() {
+        const _origReceive = window.receiveGameState;
+        if (!_origReceive) return;
+
+        window.receiveGameState = function(netState) {
+            _origReceive(netState);
+            if (netState.isCoopMode && netState.coopSnapshot) {
+                _coopApplySnapshot(netState.coopSnapshot, netState.coopHumanPlayers || window._pendingCoopHumanPlayers || 1);
+            }
+        };
+    }, 700);
+})();
+
+// Patcha anche _hostSendFullSync per includere il payload coop nei sync successivi
+(function _installCoopFullSyncHook() {
+    setTimeout(function() {
+        const _origSendFull = window._hostSendFullSync;
+        if (!_origSendFull) return;
+
+        window._hostSendFullSync = function(targetPlayerNum) {
+            // Chiama l'originale
+            _origSendFull(targetPlayerNum);
+
+            // Se siamo in coop online, invia anche lo stato coop aggiornato
+            if (coopState.active && window.isOnline && window.isHost) {
+                const coopMsg = {
+                    type: 'COOP_STATE_SYNC',
+                    coopSnapshot:      _coopSerializeState(),
+                    coopHumanPlayers:  window._coopHumanPlayers,
+                };
+                if (targetPlayerNum !== null) {
+                    const c = clientConns[targetPlayerNum];
+                    if (c && c.open) try { c.send(JSON.stringify(coopMsg)); } catch(e) {}
+                } else {
+                    broadcastToClients(coopMsg);
+                }
+            }
+        };
+
+        // Il client riceve COOP_STATE_SYNC per aggiornare quest/villaggi durante la partita
+        if (typeof registerClientMessageHandler === 'function') {
+            registerClientMessageHandler('COOP_STATE_SYNC', function(data) {
+                if (!data.coopSnapshot) return;
+                // Aggiornamento leggero: solo quest, boss, contatori
+                const s = data.coopSnapshot;
+                if (s.quests)         coopState.quests         = s.quests;
+                if (s.bossDefeated !== undefined) coopState.bossDefeated = s.bossDefeated;
+                if (s.monstersKilled !== undefined) coopState.monstersKilled = s.monstersKilled;
+                if (s.villagesFound !== undefined)  coopState.villagesFound  = s.villagesFound;
+                if (s.turnCount !== undefined)      coopState.turnCount      = s.turnCount;
+                _coopUpdateHUD();
+            });
+        }
+    }, 700);
+})();
+
+
+// ============================================================
+// GESTIONE EVENTI DI RETE COOP (Reclutamento e Resurrezione)
+// ============================================================
+setTimeout(function() {
+    if (typeof registerHostMessageHandler === 'function') {
+        // HOST: Riceve la richiesta di reclutamento da un Client
+        registerHostMessageHandler('COOP_RECRUIT_REQ', function(data, fromPlayer) {
+            if (data.faction !== fromPlayer) return;
+            if ((players[data.faction].credits || 0) < data.cost) return;
+            const village = coopState.villages.find(v => v.q === data.vq && v.r === data.vr);
+            if (!village || village.recruitsLeft <= 0) return;
+            
+            _coopApplyRecruit(data.faction, data.agent, data.cost, data.vq, data.vr);
+        });
+
+        // HOST: Riceve la richiesta di Resurrezione da un Client
+        registerHostMessageHandler('COOP_REVIVE_REQ', function(data, fromPlayer) {
+            if (data.reviverFaction !== fromPlayer) return;
+            if ((players[data.reviverFaction].credits || 0) < 10) return;
+            
+            _coopApplyRevive(data.reviverFaction, data.deadFaction, data.vq, data.vr);
+        });
+    }
+
+    if (typeof registerClientMessageHandler === 'function') {
+        // CLIENT: Riceve l'aggiornamento di un reclutamento
+        registerClientMessageHandler('COOP_RECRUIT_SYNC', function(data) {
+            players[data.faction].credits -= data.cost;
+            const village = coopState.villages.find(v => v.q === data.vq && v.r === data.vr);
+            if (village) village.recruitsLeft--;
+
+            placeEntityAt(data.agent, data.agent.q, data.agent.r);
+            players[data.faction].agents.push(data.agent);
+
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner('🪖 Nuova recluta unita al gruppo!', players[data.faction].color, { top: '80px', duration: 3000 });
+            }
+            _coopUpdateHUD();
+            updateUI();
+            drawGame();
+        });
+
+        // CLIENT: Riceve l'aggiornamento di una resurrezione
+        registerClientMessageHandler('COOP_REVIVE_SYNC', function(data) {
+            players[data.reviverFaction].credits -= 10;
+            placeEntityAt(data.agent, data.agent.q, data.agent.r);
+            players[data.deadFaction].agents.push(data.agent);
+
+            if (typeof showNotificationBanner === 'function') {
+                showNotificationBanner(`✨ ${players[data.deadFaction].name.toUpperCase()} È TORNATO IN VITA!`, players[data.deadFaction].color, { top: '80px', duration: 5000, fontSize: '18px' });
+            }
+            if (typeof playSFX === 'function') playSFX('heal');
+            
+            updateUI();
+            drawGame();
+        });
+    }
+}, 800);
+
+
+markScriptAsLoaded('coop.js');
