@@ -1,0 +1,484 @@
+/* ============================================================
+   constants.js — Costanti globali (immutabili a runtime)
+   ============================================================
+   ESPONE: COLORS, SFX, SPRITE_POOLS, hexDirections, GRID_RADIUS,
+           GAME, getKey, hexDistance, shuffleArray, getRandomSprite,
+           isAIActive, delay, MARGIN
+   DIPENDE DA: niente (caricato per primo)
+   ============================================================ */
+
+// --- GRIGLIA ---
+const GRID_RADIUS = 9;
+const MARGIN      = 150;
+
+// --- BILANCIAMENTO PARTITA ---
+// Tutti i numeri magici del gioco sono qui.
+// Modificare questi valori cambia le regole senza toccare la logica.
+const GAME = {
+    SETUP_POINTS:     30,    // punti disponibili nella fase di setup
+    AGENT_COST:        4,    // costo per reclutare un agente
+    AP_PER_TURN:       3,    // action points per agente per turno
+    HQ_HP:            30,    // HP iniziali di ogni quartier generale
+    BARRICADE_HP:      2,    // HP di una barricata costruita
+    WALL_HP_MIN:       5,    // HP minimo di un muro procedurale
+    WALL_HP_RANGE:     6,    // HP muro = WALL_HP_MIN + random(WALL_HP_RANGE)
+    WALL_DENSITY:   0.25,    // probabilita che una cella vuota diventi muro
+    WATER_DENSITY:  0.08,    // 8% di probabilità che si crei acqua
+    TURN_TIMER_SEC:   90,    // secondi per turno prima del passaggio automatico
+    AI_DELAY_MS:    1200,    // ms di attesa prima che l AI inizi il suo turno
+    AI_STEP_DELAY_MS: 1200,   // ms tra ogni azione animata dell AI
+
+    // --- SISTEMA CREDITI ---
+    CP_COUNT:            4,    // numero di punti di controllo sulla mappa
+    CREDIT_PER_CP:       1,    // crediti per punto di controllo posseduto
+    CREDIT_PER_BASE:     1,    // crediti bonus se la propria base è viva
+    CREDIT_AGENT_BASE:   4,    // costo base per reclutare un agente (+ stat extra)
+    CREDIT_CARD_REPLACE: 10,   // costo per rimpiazzare una carta già usata
+    MAX_AGENTS:          6,    // numero massimo di agenti reclutabili per fazione
+    REWARD_KILL:         4,    // Crediti guadagnati uccidendo un agente (era 2)
+    REWARD_HQ_DESTROY:   10,   // Crediti guadagnati distruggendo un HQ    
+
+
+    // --- CARTE ---
+    FORTINO_BUILDS:       4,   // numero di barricate costruibili con la carta Fortino
+    MEDIKIT_HEAL:         3,   // HP massimi curati da un Medikit automatico
+    EMP_DEBUFF_AP:        1,   // AP sottratti da EMP (modificabile)
+    EMP_DEBUFF_TURNS:     1,   // turni per cui dura l'EMP (1 = solo il prossimo turno)
+};
+
+// --- COSTANTI CAMPAGNA ---
+// Separate da GAME perché si riferiscono alla mappa strategica, non alla partita tattica.
+const CAMPAIGN = {
+    GRID_COLS:         9,
+    GRID_ROWS:         7,
+    HEX_SIZE:         70,   // dimensione esagoni nella mappa campagna (diversa da HEX_SIZE di gioco)
+
+    HQ_INCOME:                5,
+    STARTING_CREDITS:         9,
+    VICTORY_THRESHOLD:       40,
+    SURVIVOR_REWARD_VALUE:    4,   // <--- Valore fisso per ogni agente sopravvissuto
+    UPGRADE_MINE_COST:        5,   // costo Miniera (+2 rendita permanente)
+    UPGRADE_MINE_INCOME:      1,   // rendita permanente per ogni miniera
+    UPGRADE_MINEFIELD_COST:  20,   // costo Campo Minato (ferma l'attaccante)
+    UPGRADE_FORTRESS_COST:   10,   // costo Fortezza Migliorata (+4 crediti difesa in battaglia)
+    UPGRADE_BONIFICA_COST:   30,   // costo per sbloccare un settore bloccato
+    NUCLEARIZE_COST:         20,   // costo Nuclearizzazione (distrugge settore → bloccato 1 turno)
+    UPGRADE_HANGAR_COST:     40,
+    UPGRADE_LEGLAB_COST:     20,
+    UPGRADE_ARMLAB_COST:     15,
+    UPGRADE_ARMORLAB_COST:   15,
+    UPGRADE_WEAPONLAB_COST:  15,
+    UPGRADE_ICBM_COST:       60,
+    UPGRADE_ARTILLERY_COST:  20,
+    UPGRADE_NUKE_UNLOCK_COST: 60,
+    UPGRADE_REVOLT_COST:     10,    // costo upgrade Rivolta
+    UPGRADE_REVOLT_THRESHOLD: 4,    // crediti minimi per sopravvivere alla Rivolta
+    UPGRADE_INFILTRATI_COST: 20,
+    NEUTRAL_UPGRADES_COUNT:   9,
+    // COSTANTI MECCANICHE
+    ARTILLERY_RANGE:          3,    // gittata di artiglieria
+    ARTILLERY_CREDIT_DMG_PERCENT: 0.5,
+    AGENT_ATTACK_RANGE:       1,
+    BLOCKED_SECTORS_COUNT:   18,    // settori iniziali bloccati
+};
+
+// --- COLORI FAZIONI E UI ---
+const COLORS = {
+    bg:        '#050509',
+    grid:      '#1a1a25',
+    wall:      '#3a3a50',
+    p1:        '#00ff88', p1Fill: 'rgba(0, 255, 136, 0.15)',
+    p2:        '#cc00ff', p2Fill: 'rgba(204, 0, 255, 0.15)',
+    p3:        '#00aaff', p3Fill: 'rgba(0, 170, 255, 0.15)',
+    p4:        '#FFD700', p4Fill: 'rgba(255, 215, 0, 0.15)',
+    
+    p5: '#ff3333', p5Fill: 'rgba(255, 51, 51, 0.15)', // Rosso
+    p6: '#ffffff', p6Fill: 'rgba(255, 255, 255, 0.15)', // Bianco
+    p7: '#999999', p7Fill: 'rgba(168, 168, 168, 0.15)', // Grigio Scuro
+    p8: '#ff69b4', p8Fill: 'rgba(255, 105, 180, 0.15)', // Rosa
+ 
+    moveNeon:  '#00ffff', moveFill:  'rgba(0, 255, 255, 0.25)',
+    atkNeon:   '#ff3333', atkFill:   'rgba(255, 51, 51, 0.3)',
+    buildNeon: '#FFD700', buildFill: 'rgba(255, 215, 0, 0.3)',
+};
+
+// --- AUDIO ---
+const SFX = {
+    laser:   new Audio('sfx/sfx-laser.mp3'),
+    melee:   new Audio('sfx/sfx-melee.mp3'),
+    move:    new Audio('sfx/sfx-move.mp3'),
+    build:   new Audio('sfx/sfx-build.mp3'),
+    heal:    new Audio('sfx/sfx-heal.wav'),
+    click:   new Audio('sfx/sfx-click.mp3'),
+    explosion: new Audio('sfx/sfx-explosion.mp3'),
+    crollo:    new Audio('sfx/sfx-crollo.mp3'),
+    uzi:       new Audio('sfx/sfx-uzi.mp3'),
+    boom:      new Audio('sfx/sfx-boom.mp3'),
+    bgMusic:   new Audio('sfx/sfx-bg_music.mp3'),
+    fMusic1:   new Audio('sfx/sfx-verde.mp3'),
+    fMusic2:   new Audio('sfx/sfx-viola.mp3'),
+    fMusic3:   new Audio('sfx/sfx-blu.mp3'),
+    fMusic4:   new Audio('sfx/sfx-oro.mp3'),
+    fMusic5:   new Audio('sfx/sfx-rosso.mp3'),
+    fMusic6:   new Audio('sfx/sfx-bianco.mp3'),
+    fMusic7:   new Audio('sfx/sfx-grigio.mp3'),
+    fMusic8:   new Audio('sfx/sfx-rosa.mp3'),
+};
+SFX.bgMusic.loop   = true;
+SFX.bgMusic.volume = 0.10;
+
+// --- SPRITE POOLS (emoji fallback) ---
+const SPRITE_POOLS = {
+    1:          ['🕵️','🥷','🧤','👮','👽'],
+    2:          ['🤖','🦾','👾','👹','💀'],
+    3:          ['🧬','🦅','🪖','🛡️','🤺'],
+    4:          ['🐉','🦁','⚔️','🏹','🔱'],
+    5: ['🧨','👺','🥊','🎯','🚩'],
+    6: ['🧊','🏐','🦢','💎','🏳️'],
+    7: ['🌑','💣','⛓️','🕶️','🏴'],
+    8: ['🌸','🎀','🍭','🦄','🧠'],
+    hqs: ['🏯','🛰️','🏰','🗼','🛖','🏢','🏭','🏠'],
+    walls:      ['🧱','🗿','⛰️','🏛️'],
+    barricades: ['🚧','📦','🗑️','⚙️'],
+};
+
+// --- DIREZIONI ESAGONALI (pointy-top) ---
+const hexDirections = [
+    { q:  1, r:  0 }, { q: 1, r: -1 }, { q:  0, r: -1 },
+    { q: -1, r:  0 }, { q:-1, r:  1 }, { q:  0, r:  1 },
+];
+
+
+// --- PREFISSI IMMAGINI AGENTI ---
+// Definisce il prefisso e il numero totale di immagini disponibili per fazione.
+// Se vuoi aggiungere più immagini (es. da 4 a 11), basta cambiare il "count" qui
+// e aggiungere i file (es. EUR5.png ... EUR11.png) nella cartella "img/".
+const FACTION_PREFIXES = {
+    1: { prefix: 'EUR', count: 16 }, // Verdi
+    2: { prefix: 'ZER', count: 16 }, // Viola
+    3: { prefix: 'MED', count: 16 }, // Blu
+    4: { prefix: 'GUA', count: 16 }, // Oro
+    5: { prefix: 'DEM', count: 16 }, // Rossi
+    6: { prefix: 'ALI', count: 16 }, // Bianchi
+    7: { prefix: 'ROB', count: 16 }, // Grigi
+    8: { prefix: 'UNI', count: 9 }  // Rosa
+};
+
+// Dati di ogni fazione: tutte e 8 le opzioni disponibili.
+const _FACTION_DEFS = [
+    { slot: 1, name: 'Verde',  color: COLORS.p1, spritePool: SPRITE_POOLS[1] },
+    { slot: 2, name: 'Viola',  color: COLORS.p2, spritePool: SPRITE_POOLS[2] },
+    { slot: 3, name: 'Blu',    color: COLORS.p3, spritePool: SPRITE_POOLS[3] },
+    { slot: 4, name: 'Oro',    color: COLORS.p4, spritePool: SPRITE_POOLS[4] },
+    { slot: 5, name: 'Rosso',  color: COLORS.p5, spritePool: SPRITE_POOLS[5] },
+    { slot: 6, name: 'Bianco', color: COLORS.p6, spritePool: SPRITE_POOLS[6] },
+    { slot: 7, name: 'Grigio', color: COLORS.p7, spritePool: SPRITE_POOLS[7] },
+    { slot: 8, name: 'Rosa',   color: COLORS.p8, spritePool: SPRITE_POOLS[8] },
+];
+
+
+// ============================================================
+// UTILITY PURE (nessun effetto collaterale sullo stato)
+// ============================================================
+
+/** Chiave stringa per la Map della griglia */
+function getKey(q, r) { return `${q},${r}`; }
+
+/** Distanza in esagoni tra due coordinate assiali */
+function hexDistance(a, b) {
+    return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+}
+
+/** Fisher-Yates shuffle (modifica l'array in-place, lo restituisce) */
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+/** Estrae un elemento casuale da un pool */
+const getRandomSprite = (pool) => pool[Math.floor(Math.random() * pool.length)];
+
+/** Legge lo stato del checkbox IA nel setup */
+const isAIActive = () => document.getElementById('ai-active')?.checked;
+
+/** Promise-based delay per le sequenze animate dell'AI */
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+// ============================================================
+// AUDIO
+// ============================================================
+
+// --- GESTIONE AUDIO CENTRALIZZATA ---
+// --- GESTIONE STATO AUDIO E VOLUME ---
+let musicPlaying = false;
+let currentMusicTrack = SFX.bgMusic;
+let globalMusicVolume = 0.10;
+let volumeTimeout = null;
+
+function _stopAllMusic() {
+    try { 
+        SFX.bgMusic.pause(); 
+        SFX.bgMusic.currentTime = 0; 
+        SFX.bgMusic.volume = 0; 
+    } catch(e) {}
+    for (let i = 1; i <= 8; i++) {
+        const track = SFX['fMusic' + i];
+        if (track) { 
+            try { track.pause(); track.currentTime = 0; } catch(e) {} 
+        }
+    }
+}
+
+// Genera e gestisce la levetta del volume a scomparsa
+function _showVolumeSlider() {
+    let container = document.getElementById('volume-slider-container');
+    
+    // Lista delle tracce disponibili
+    const trackList = [
+        { id: 'bgMusic', name: '🎵 Battle Theme' },
+        { id: 'fMusic1', name: '🟩 Fazione Verde' },
+        { id: 'fMusic2', name: '🟪 Fazione Viola' },
+        { id: 'fMusic3', name: '🟦 Fazione Blu' },
+        { id: 'fMusic4', name: '🟨 Fazione Oro' },
+        { id: 'fMusic5', name: '🟥 Fazione Rosso' },
+        { id: 'fMusic6', name: '⬜ Fazione Bianco' },
+        { id: 'fMusic7', name: '⬛ Fazione Grigio' },
+        { id: 'fMusic8', name: '🌸 Fazione Rosa' }
+    ];
+
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'volume-slider-container';
+        container.style.cssText = `
+            position: fixed; top: 5px; right: 80px; z-index: 200001;
+            background: rgba(5, 5, 15, 0.95); border: 2px solid #00ff88;
+            border-radius: 6px; padding: 10px;
+            display: flex; flex-direction: column; gap: 8px;
+            transition: opacity 0.3s ease; opacity: 0; pointer-events: none;
+            box-shadow: 0 0 15px #00ff8866; font-family: 'Courier New', monospace;
+        `;
+
+        // 1. Slider del volume
+        let html = `
+            <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid #333;">
+                <span style="color:#00ff88; font-size:16px; line-height:1;">🔈</span>
+                <input type="range" id="music-vol" min="0" max="1" step="0.05" value="${globalMusicVolume}" 
+                       style="width: 140px; accent-color: #00ff88; cursor: pointer;">
+            </div>
+            <div id="jukebox-list" style="display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; overflow-x:hidden; padding-right:4px;">
+        `;
+
+        // 2. Generazione Bottoni Jukebox
+        trackList.forEach(t => {
+            html += `<button class="jukebox-btn" data-track="${t.id}" 
+                        style="background:transparent; border:1px solid #333; color:#aaa; text-align:left; 
+                               padding:6px 8px; cursor:pointer; border-radius:4px; transition:all 0.2s; 
+                               white-space:nowrap; font-family:'Courier New'; font-size:12px;">
+                        ${t.name}
+                     </button>`;
+        });
+
+        html += `</div>`;
+        container.innerHTML = html;
+        document.body.appendChild(container);
+
+        // --- EVENT LISTENER VOLUME ---
+        const slider = document.getElementById('music-vol');
+        slider.addEventListener('input', (e) => {
+            globalMusicVolume = parseFloat(e.target.value);
+            if (currentMusicTrack) currentMusicTrack.volume = globalMusicVolume;
+        });
+
+        // --- EVENT LISTENER JUKEBOX ---
+        const buttons = container.querySelectorAll('.jukebox-btn');
+        buttons.forEach(btn => {
+            // Effetto Hover
+            btn.onmouseenter = () => { if (btn.style.color !== 'rgb(0, 255, 136)') btn.style.background = '#222'; };
+            btn.onmouseleave = () => { if (btn.style.color !== 'rgb(0, 255, 136)') btn.style.background = 'transparent'; };
+            
+            // Click per cambiare canzone
+            btn.onclick = (e) => {
+                const trackId = e.target.getAttribute('data-track');
+                const newTrack = SFX[trackId];
+                if (!newTrack) return;
+
+                _stopAllMusic();
+                currentMusicTrack = newTrack;
+                currentMusicTrack.loop = true;
+                currentMusicTrack.volume = globalMusicVolume;
+                
+                if (musicPlaying) currentMusicTrack.play().catch(() => {});
+                
+                _updateJukeboxUI(); // Colora il bottone della traccia attiva
+            };
+        });
+
+        // --- GESTIONE TIMER INTELLIGENTE ---
+        // Se il mouse entra nel pannello, ferma il timer (non scompare)
+        container.onmouseenter = () => { if (volumeTimeout) clearTimeout(volumeTimeout); };
+        // Se il mouse esce, fa ripartire il timer di 3 secondi
+        container.onmouseleave = () => _resetVolumeTimer(container);
+    }
+
+    // Funzione interna per evidenziare la traccia in esecuzione
+    function _updateJukeboxUI() {
+        const buttons = container.querySelectorAll('.jukebox-btn');
+        buttons.forEach(btn => {
+            const trackId = btn.getAttribute('data-track');
+            if (currentMusicTrack === SFX[trackId]) {
+                btn.style.color = '#00ff88';
+                btn.style.borderColor = '#00ff88';
+                btn.style.background = 'rgba(0,255,136,0.1)';
+            } else {
+                btn.style.color = '#aaa';
+                btn.style.borderColor = '#333';
+                btn.style.background = 'transparent';
+            }
+        });
+    }
+
+    // Mostra il pannello e aggiorna la UI
+    _updateJukeboxUI();
+    container.style.opacity = '1';
+    container.style.pointerEvents = 'auto';
+    _resetVolumeTimer(container);
+}
+
+// Timer di auto-chiusura (4 secondi per dare più tempo di lettura)
+function _resetVolumeTimer(container) {
+    if (volumeTimeout) clearTimeout(volumeTimeout);
+    volumeTimeout = setTimeout(() => {
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+    }, 4000); 
+}
+
+function toggleMusic() {
+    if (!musicPlaying) {
+        if (currentMusicTrack) {
+            currentMusicTrack.volume = globalMusicVolume;
+            currentMusicTrack.play().catch(() => {});
+        }
+        musicPlaying = true;
+        _showVolumeSlider(); // Mostra lo slider quando si accende
+    } else {
+        _stopAllMusic();
+        musicPlaying = false;
+        // Nascondi immediatamente lo slider se si spegne la musica
+        const container = document.getElementById('volume-slider-container');
+        if (container) {
+            container.style.opacity = '0';
+            container.style.pointerEvents = 'none';
+        }
+    }
+    
+    const activeColor = musicPlaying ? '#00ff88' : '#ff4444';
+    const activeText  = musicPlaying ? '🎵 ON' : '🎵 OFF';
+    
+    const battleBtn = document.getElementById('audio-toggle');
+    if (battleBtn) {
+        battleBtn.style.color = activeColor;
+        battleBtn.innerText   = activeText;
+    }
+
+    const campBtn = document.getElementById('camp-music-btn');
+    if (campBtn) campBtn.style.color = activeColor;
+}
+
+function playFactionMusic(cosmeticFaction) {
+    const key = 'fMusic' + cosmeticFaction;
+    const newTrack = SFX[key];
+    if (!newTrack) return;
+
+    _stopAllMusic();
+
+    currentMusicTrack = newTrack;
+    currentMusicTrack.loop = true;
+    currentMusicTrack.volume = globalMusicVolume; // Usa il volume scelto dall'utente
+
+    if (musicPlaying) {
+        currentMusicTrack.play().catch(() => {});
+    }
+
+    const activeColor = musicPlaying ? '#00ff88' : '#ff4444';
+    const activeText  = musicPlaying ? '🎵 ON' : '🎵 OFF';
+    
+    const btnBattle = document.getElementById('audio-toggle');
+    if (btnBattle) {
+        btnBattle.style.color = activeColor;
+        btnBattle.innerText = activeText;
+    }
+
+    const btnCamp = document.getElementById('camp-music-btn');
+    if (btnCamp) btnCamp.style.color = activeColor;
+}
+
+function playSFX(effect) {
+    const audio = SFX[effect];
+    if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+
+        // Calcolo probabilità: 40% modificato, 60% normale
+        const isModifiedChance = Math.random() < 0.4;
+        const canBeModified = ['laser', 'melee'].includes(effect);
+
+        if (canBeModified && isModifiedChance) {
+            // === EFFETTO MODIFICATO (40% di probabilità per laser/melee) ===
+            
+            // 1. Tonalità leggermente più bassa, ma NON lentissima (0.9 mantiene l'impatto)
+            audio.playbackRate = 0.9;
+            audio.volume = 1.0;
+            
+            // 2. EFFETTO HAAS: Ritardi microscopici (3-4ms)
+            const thickCount = 3; 
+            const haasDelayMs = 4; 
+
+            for (let i = 1; i <= thickCount; i++) {
+                setTimeout(() => {
+                    const clone = audio.cloneNode();
+                    // Il pitch cala di un niente (0.02) per "slargare" la frequenza
+                    clone.playbackRate = 0.9 - (i * 0.02); 
+                    clone.volume = 0.8;
+                    clone.play().catch(() => {});
+                    clone.onended = () => { clone.src = ''; };
+                }, i * haasDelayMs);
+            }
+        } else {
+            // === SUONO NORMALE (60% di probabilità o altri effetti) ===
+            audio.playbackRate = 1.0;
+            audio.volume = 1.0;
+        }
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {});
+        }
+    }
+}
+
+function toggleLegend() {
+    document.getElementById('legend-panel').classList.toggle('visible');
+    playSFX('click');
+}
+
+// REGISTRO CARICAMENTO SCRIPT
+window.requiredScripts = [
+    'constants.js', 'style.css', 'core.js',
+    'map.js', 'network_core.js', 'network_sync.js', 'gamelogic.js', 
+    'ai.js', 'cards.js', 'setup.js', 'credits.js', 'carduse.js', 
+    'main.js', 'campaign_upgrades.js', 'campaign_map.js', 'campaign_battle.js', 
+    'campaign_multiplayer.js', 'coop.js'
+];
+window.loadedScripts = new Set();
+
+function markScriptAsLoaded(name) {
+    window.loadedScripts.add(name);
+    console.log(`[System] Script caricato: ${name}`);
+}
+
+// Segnala subito se stesso
+markScriptAsLoaded('constants.js');
