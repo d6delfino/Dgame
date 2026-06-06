@@ -1,0 +1,352 @@
+ <!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLegion Wars - Manuale Operativo</title>
+    <style>
+        /* STILE SCHERMO - TEMA DARK TATTICO */
+        :root {
+            --bg-color: #121418;
+            --container-bg: #1e2128;
+            --text-main: #d1d5db;
+            --accent-red: #ff3333;
+            --accent-blue: #00d2ff;
+            --accent-gold: #ffd700;
+            --accent-green: #00ff88; /* AGGIUNTO VERDE NEON */
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .manual-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: var(--container-bg);
+            padding: 50px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border-top: 6px solid var(--accent-green);
+        }
+
+        h1 {
+            color: var(--accent-green); /* MODIFICATO IN VERDE */
+            text-align: center;
+            text-transform: uppercase;
+            font-size: 2.8em;
+            letter-spacing: 2px;
+            margin-top: 0;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            text-shadow: 0 0 15px rgba(0, 255, 136, 0.4); /* EFFETTO GLOW NEON */
+        }
+
+        h2 {
+            color: var(--accent-blue);
+            font-size: 1.8em;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+
+        h3 {
+            color: var(--accent-gold);
+            font-size: 1.3em;
+            margin-top: 30px;
+        }
+
+        .intro {
+            font-style: italic;
+            font-size: 1.1em;
+            color: #a0aabf;
+            border-left: 4px solid var(--accent-green); /* MODIFICATO BORDINO */
+            padding-left: 20px;
+            margin-bottom: 40px;
+            background: rgba(0, 255, 136, 0.05); /* SFONDO VERDINO TRASPARENTE */
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .intro p { margin: 10px 0; }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .card-list li {
+            background-color: #252830;
+            margin-bottom: 12px;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-blue);
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 15px;
+            line-height: 1;
+        }
+
+        .text-content { flex: 1; }
+        
+        strong { color: #ffffff; }
+
+        .highlight { color: var(--accent-gold); font-weight: bold; }
+
+        /* STILE PER SCREENSHOT GRANDI */
+        .screenshot {
+            max-width: 100%;      /* Rende l'immagine responsive su mobile */
+            height: auto;
+            display: block;
+            margin: 25px auto;    /* La centra automaticamente */
+            border-radius: 8px;   /* Angoli arrotondati come i tuoi div */
+            border: 2px solid var(--accent-blue); /* Bordo a tema */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        /* STILE PER PICCOLE ICONE/SPRITE */
+        .inline-icon {
+            height: 1.8em;        /* Si adatta all'altezza del testo */
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+
+
+        /* STILE STAMPA - BIANCO E NERO PER RISPARMIARE INCHIOSTRO */
+        @media print {
+            body { background-color: white; color: black; padding: 0; }
+            .manual-container { box-shadow: none; border: none; padding: 0; }
+            h1, h2, h3, strong, .highlight { color: black !important; }
+            h1, h2 { border-bottom: 1px solid black; }
+            .intro { border-left: 4px solid black; background: transparent; color: black; }
+            .card-list li { background-color: transparent; border: 1px solid #ccc; border-left: 4px solid black; break-inside: avoid; }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px 0;
+            }
+            .manual-container {
+                padding: 20px 14px;
+                border-radius: 0;
+            }
+            h1 { font-size: 1.8em; }
+            h2 { font-size: 1.3em; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="manual-container">
+
+    <h1>📖 DLEGION WARS</h1>
+
+    <p>Manuale Tattico del Comandante</p>
+    <img src="img/intro.png" alt="Scontro di menti" class="screenshot">
+
+    <div class="intro">
+        <p><strong>Benvenuto, Comandante.</strong></p>
+        <p>DLegion Wars non è un semplice gioco di battaglie a turni. È una spietata scacchiera tattica dove la fortuna ha poco spazio e ogni tua scelta, dalla personalizzazione delle tue truppe al posizionamento tattico sul campo, determinerà la tua sopravvivenza... e forse la tua vittoria.</p>
+        <p>Che tu stia affrontando i tuoi amici in brutali schermaglie, orchestrando il dominio del mondo in una Campagna Strategica, o sopravvivendo a orrori sconosciuti in modalità Cooperativa, una sola regola vale sempre:<br> <strong>La fortuna finisce, l'abilità no.</strong></p>
+        <p></p>
+    </div>
+
+    <h2>🎖️ LA FILOSOFIA DI DLEGION WARS</h2>
+    <p>Prima di scendere in campo, è importante comprendere la filosofia del gioco.
+    In DLegion Wars, il tuo peggior nemico non è la sfortuna, ma un piano mal congeniato. A differenza dei classici giochi di strategia, qui eliminiamo l'incertezza del dado: se vedi il nemico e sei a portata, lo colpisci. Questo trasforma ogni partita in una sfida di puro ingegno, simile agli scacchi ma con la profondità di un moderno gioco di guerra. Il successo dipenderà dalla tua capacità di prevedere le mosse avversarie e di creare sinergie tra i tuoi agenti e le loro abilità speciali.</p>
+    <ul class="card-list">
+        <li>
+            <div class="text-content"><strong>Non è un "prodotto commerciale", ma un gioco realizzato al solo scopo di appagare i giocatori:</strong> Diverso dalla massa negli intenti e nel profondo, vuole dare ai giocatori un esperienza che premia l'abilità e l'impegno, grazie alle infinite possibilità i giocatori ogni singola volta dovranno trovare la miglior tattica per quel caso specifico e irripetibile. Inoltre le tre modalità (battaglia, campagna e coop) si adattano a tre tipologie di gruppi di gioco, in modo da soddisfare tutti e tutte le tempistiche: da partite di 10 minuti a serate di strategia o avventure stile gioco di ruolo! La sua struttura "facile da imparare, difficile da dominare" lo rende adatto ai neofiti ed apprezzato dai veterani. In ultimo una turnazione veloce e battaglie scandite da un timer rendono l'azione sempre eccitante e concitata, senza mai cadere nella "paralisi da analisi".
+            L'obiettivo reale del gioco è solo divertire ed appassionare i giocatori, offrendo una sfida sempre nuova, interessante ed irripetibile, che vi porterà a dire con entusiasmo: "ancora una partita, che provo una nuova configurazione!" . 
+            </div>
+        </li>
+        <li>
+            <div class="text-content"><strong>Nessun Lancio di Dadi (Determinismo):</strong> Nel combattimento tattico di questo gioco non esiste la "probabilità di colpire". Dimentica i turni frustranti in cui un piano perfetto fallisce per un lancio sfortunato: se un nemico è a portata e la visuale è libera, il tuo colpo andrà a segno. Sempre. Se il tuo Danno è 3 e la sua Vita è 3, il nemico è a terra. Questo sistema premia il posizionamento, l'ingegno e la pura abilità. Calcolare una sequenza di mosse impeccabile o anticipare la contromossa dell'avversario regala una soddisfazione che nessun tiro di dado da 20 può eguagliare. Esiste comunque un marcato "fattore sorpresa" rappresentato dalle infinite possibilità di scelta da parte dei nemici, che spesso sorprenderanno anche i giocatori più esperti. Che tu sia un amante del calcolo perfetto o un veterano dei giochi di fortuna, ti sfidiamo a metterti alla prova: scoprirai quanto può essere elettrizzante attendere le mosse dell'avversario sperando in un suo passo falso!</div>
+        </li>
+        <li>
+            <div class="text-content"><strong>Personalizzazione Totale:</strong> Non hai truppe predefinite. Con il tuo budget iniziale scolpirai ogni singolo agente: creerai lenti ma letali tank d'assalto, o fragili cecchini ultra-rapidi? ...o magari creerai tanti agenti bilanciati ed intercambiabili? Totale libertà di scelta... e relative conseguenze. I giocatori si appassionano ai loro agenti, che possono personalizzare sia a livello estetico che funzionale, in stile gioco di ruolo, fino a creare veri e propri "war party" più o meno specializzati a seconda delle strategie e dei gusti.</div>
+        </li>
+        <li>
+            <div class="text-content"><strong>⚛️Sinergie Devastanti Imprevedibili:</strong> "In DLegion Wars, la fortuna non è che un'ombra sbiadita davanti all'infinità delle combinazioni possibili."
+            L'intreccio tra Punti Azione, Bonus Terreno e Carte Strategiche genera quello che chiamiamo Caos Deterministico. Non esiste la casualità del dado, ma esiste l'imprevedibilità dell'intelletto: miliardi di combinazioni sono già scritte nella geometria della mappa, in attesa che la tua volontà le scateni nel momento esatto.
+            In questo ecosistema, non esiste una "strategia imbattibile" universale. Esiste solo la mossa perfetta per quel frammento di tempo, l'intuizione fulminea capace di vedere un varco dove gli altri vedono solo un muro. Ogni azione ha la sua contromossa, e ogni vantaggio può sgretolarsi davanti a una sinergia inaspettata.
+            È questa la vera essenza del comando: il fiato sospeso prima di un'esecuzione impeccabile che ribalta un destino segnato. Non aspettare che sia un dado a salvarti: progetta il tuo miracolo tattico ed assapora una vittoria meritata!</div>
+        </li>
+    </ul>
+
+    <h2>⚙️ COME SI GIOCA</h2>
+    <p>La Battaglia è il cuore del gioco e si svolge su una griglia esagonale. Ogni giocatore controlla il proprio <strong>Quartier Generale (HQ)</strong> e una squadra di Agenti da lui selezionati. L'obiettivo è distruggere le Basi nemiche o annientare tutte le forze avversarie.</p>
+
+    <h3>1. La Fase di Setup (Reclutamento)</h3>
+    <p>Prima di scendere in campo, devi comporre la tua squadra. Non esiste una "squadra perfetta", ma esistono ruoli specializzati. Con i tuoi 30 crediti iniziali, puoi scegliere se schierare pochi agenti d'élite (molto resistenti e letali) o un piccolo esercito di reclute sacrificabili per circondare l'avversario. La battaglia inizia con <span class="highlight">30 Punti Setup (Crediti)</span>. Ogni Agente costa di base 4 Punti (con statistiche minime 1-1-1-1). Puoi spendere i punti rimanenti per potenziare 4 attributi chiave:</p>
+    <ul class="card-list">
+        <li><span class="emoji">❤️</span><div class="text-content"><strong>VITA (HP):</strong> I punti ferita dell'agente (Max 5).</div></li>
+        <li><span class="emoji">👟</span><div class="text-content"><strong>PASSI (MOV):</strong> Quanti esagoni può percorrere con un'azione di movimento (Max 3).</div></li>
+        <li><span class="emoji">🎯</span><div class="text-content"><strong>TIRO (RNG):</strong> La gittata delle sue armi (Max 9).</div></li>
+        <li><span class="emoji">⚔️</span><div class="text-content"><strong>DANNO (DMG):</strong> I danni inflitti con un singolo attacco (Max 4).</div></li>
+    </ul>
+    <p>Infine, dovrai selezionare segretamente <strong>3 Carte Strategiche</strong> (Abilità monouso) che porterai in battaglia.</p>
+
+    <h3>2. Il Turno Tattico</h3>
+    <p>Quando è il tuo turno, ogni tuo Agente in vita dispone di <span class="highlight">3 Punti Azione (AP)</span>. La gestione dei Punti Azione (AP) è il cuore del gioco, la vera potenza risiede nella libertà di sequenza: puoi muovere un agente, passare a un altro per distruggere un muro, e poi tornare al primo per sparare nel varco appena aperto. Non sei obbligato a finire le azioni di un agente prima di passare al successivo. Impara a "spezzare" i turni per massimizzare l'efficacia della tua squadra.</p>
+    <ul class="card-list">
+        <li><span class="emoji">🏃</span><div class="text-content"><strong>Muovi (1 AP):</strong> Spostati in un esagono libero entro i tuoi Passi.</div></li>
+        <li><span class="emoji">🔫</span><div class="text-content"><strong>Spara (1 AP):</strong> Infliggi il tuo Danno a un nemico (o ostacolo) entro il tuo Tiro. Il fuoco amico è disabilitato, ma gli alleati bloccano la linea di tiro! Da distanza 1 l'attacco è corpo a corpo.</div></li>
+        <li><span class="emoji">🚧</span><div class="text-content"><strong>Barricata (2 AP):</strong> Costruisci un riparo (2 HP) su un esagono adiacente per bloccare i proiettili. Puoi anche rinforzare una barricata esistente.</div></li>
+        <li><span class="emoji">💉</span><div class="text-content"><strong>Cura (2 AP):</strong> Ripristina 1 HP a se stessi o a un agente adiacente.</div></li>
+    </ul>
+
+    <h3>3. L'Ambiente a tua disposizione (I bonus/malus Terreni)</h3>
+    <p>Il campo di battaglia non è solo uno sfondo, è un alleato o un ostacolo. Ogni esagono può modificare drasticamente le tue statistiche base. Un buon Comandante non si ferma mai in campo aperto: cerca sempre l'altura per vedere più lontano o la nebbia per tendere imboscate. Impara a leggere la mappa prima di muoverti, o ti ritroverai impantanato nel fango mentre il nemico ti bersaglia dall'alto.
+    Infine ricorda che anche il Tempo può essere tuo alleato o tuo nemico, ad esempio se controlli la maggioranza dei punti di controllo sulla mappa, ogni turno stai sicuramente guadagnando più del tuo avversario.
+    Ogni mappa è diversa, generata casualmente, e ciò premia i giocatori che si adattano meglio e più velocemente.</p>
+    <ul class="card-list">
+        <li><span class="emoji">⛰️</span><div class="text-content"><strong>Altura:</strong> Aggiunge +1 alla tua Gittata di Tiro.</div></li>
+        <li><span class="emoji">☁️</span><div class="text-content"><strong>Nebbia:</strong> Le unità all'interno non possono essere mirate da lontano. Devi arrivargli adiacente (Distanza 1) per colpirle!</div></li>
+        <li><span class="emoji">🛡️</span><div class="text-content"><strong>Copertura:</strong> Riduce di 1 qualsiasi Danno subito.</div></li>
+        <li><span class="emoji">🟤</span><div class="text-content"><strong>Fango:</strong> Ti impantana. Da qui puoi muoverti solo di 1 esagono alla volta, ignorando la tua statistica Passi.</div></li>
+        <li><span class="emoji">🌊</span><div class="text-content"><strong>Acqua:</strong> Blocca il movimento ma non il tiro.</div></li>
+    </ul>
+
+    <h3>4. 🔭 Linea di Tiro e Ostacoli</h3>
+    <p>Poiché ogni colpo va sempre a segno, capire la Linea di Tiro (Line of Sight), come e quando attaccare, è vitale:</p>
+    <ul class="card-list">
+        <li><span class="emoji">🛑</span><div class="text-content"><strong>Linea di Tiro:</strong> I colpi viaggiano dritti per la distanza dell' abilità di tiro solo lungo le 6 direzioni delle linee di esagoni, non a zig-zag! Qualsiasi entità blocca i proiettili. I tuoi stessi alleati bloccheranno la tua linea di tiro verso i nemici se si trovano in mezzo.</div></li>
+        <li><span class="emoji">🧱</span><div class="text-content"><strong>Ostacoli Distruttibili:</strong> I muri della mappa e le barricate costruite dai giocatori non sono eterni. Hanno dei Punti Vita (HP) e possono essere presi di mira e distrutti per aprirsi un varco. L'acqua invece non può essere distrutta ma permette il passaggio dei colpi.</div></li>
+        <li><span class="emoji">⚔️</span><div class="text-content"><strong>Corpo a Corpo:</strong> Se attacchi un nemico adiacente (Distanza 1), il colpo si trasforma in un attacco corpo a corpo. Colpisce sempre il nemico anche se si trova nella Nebbia.</div></li>
+    </ul>
+
+    <div class="intro" style="border-left-color: var(--accent-blue); background: rgba(0, 210, 255, 0.05);">
+        <p><strong>🧠 Esempio di Flessibilità Tattica:</strong><br>
+        Hai due agenti. Puoi spendere 1 AP del Primo Agente per farlo uscire dalla copertura e fargli sparare alla copertura del nemico, distruggendola. Passare al Secondo Agente e fargli spendere 1 AP per muoversi e 1 AP per sparare al nemico appena rivelato. Quindi tornare al Primo Agente e fargli spendere il suo ultimo AP per rimettersi al riparo e magari farlo anche per il secondo agente. L'ordine in cui spendi i tuoi AP complessivi è a tua totale discrezione!</p>
+    </div>
+
+
+    <h3>5. L'Economia di Guerra (Il Negozio)</h3>
+    <p>Mantenere la superiorità economica è un notevole vantaggio. Ad ogni tuo turno guadagni crediti:</p>
+    <ul>
+        <li>✔️ <strong>+1 Credito</strong> se il tuo HQ è in vita.</li>
+        <li>✔️ <strong>+1 Credito</strong> per ogni Punto di Controllo (CP - esagono con la "X") che hai occupato.</li>
+        <li>✔️ <strong>+4 Crediti</strong> per ogni uccisione eseguita.</li>
+        <li>✔️ <strong>+10 Crediti</strong> se distruggi un HQ nemico!</li>
+    </ul>
+    <p>Con i crediti, durante il tuo turno puoi aprire il <strong>Negozio 🛒</strong> per reclutare nuovi Agenti (vengono schierati vicino al tuo HQ con 0 AP) o scegliere Carte (costo 10 cr) per utilizzare abilità devastanti.</p>
+
+    <h2>🃏 L'ARSENALE: LE CARTE TATTICA</h2>
+    <p>Scegliere gli strumenti giusti per attuare al meglio la propria tattica è essenziale. Sono abilità speciali molto potenti ma situazionali,
+     se usate correttamente e al momento giusto possono stravolgere una battaglia, al contrario se usate in modo improprio o in tempistiche errate risulteranno inutili.
+     Se le statistiche degli agenti sono la tua forza bruta, le Carte sono il tuo asso nella manica. Le carte ti permettono di "rompere le regole" del gioco: teletrasportarsi, sparare attraverso i muri o annullare i poteri nemici. Poiché sono monouso (a meno di non riacquistarle nel negozio), il tempismo è tutto. Usare un Airdrop al turno 1 potrebbe essere uno spreco, ma magari usarlo al turno 10 per paracadutarti dietro l'HQ nemico quando è incustodito ti regalerà la vittoria.</p>
+    <ul class="card-list">
+        <li><span class="emoji">⚡</span><div class="text-content"><strong>Blitz:</strong> Dona istantaneamente +1 AP a un agente. Ottimo per colpi a sorpresa.</div></li>
+        <li><span class="emoji">🪂</span><div class="text-content"><strong>Airdrop (Costa 3 AP):</strong> L'agente si teletrasporta ovunque sulla mappa.</div></li>
+        <li><span class="emoji">🎯</span><div class="text-content"><strong>Cecchino:</strong> Raddoppia la gittata per un turno, e il proiettile perfora il primo ostacolo/nemico, colpendo anche chi sta dietro!</div></li>
+        <li><span class="emoji">📡</span><div class="text-content"><strong>EMP:</strong> Colpisce ad area un raggio di 5 esagoni. Distrugge tutti gli scudi nemici, disabilita i buff "Spettro", dissolve la copertura della Nebbia e toglie 1 AP nel prossimo turno.</div></li>
+        <li><span class="emoji">💣</span><div class="text-content"><strong>Esplosivo:</strong> Raddoppia il danno di questo turno nella cella direttamente colpita, e il colpo crea un'esplosione ad area, applicando un danno dimezzato a tutti gli esagoni adiacenti al bersaglio.</div></li>
+        <li><span class="emoji">👤</span><div class="text-content"><strong>Spettro (Permanente):</strong> L'agente per muoversi ignora muri ed altri ostacoli, e passa attraverso tutto, usandolo anche come copertura.</div></li>
+        <li><span class="emoji">🛡️</span><div class="text-content"><strong>Scudo (Permanente finché non colpito):</strong> Annulla completamente il prossimo danno subito.</div></li>
+        <li><span class="emoji">🏰</span><div class="text-content"><strong>Fortino:</strong> Costruisci istantaneamente 4 barricate dove vuoi, ovunque sulla mappa.</div></li>
+        <li><span class="emoji">💉</span><div class="text-content"><strong>MediBuff (Permanente):</strong> Al primo danno subito, l'agente si curerà in automatico fino a 3 HP. Inoltre per il turno in corso riceve un boost di +1 a Tutte le Statistiche!</div></li>
+        <li><span class="emoji">🧬</span><div class="text-content"><strong>Upgrade:</strong> Scegli una statistica (HP, MOV, RNG o DMG) e aumentala di 1 punto permanentemente. Permette di superare i limiti di creazione!</div></li>
+    </ul>
+
+    <h2>🗺️ LE 3 MODALITÀ DI GIOCO</h2>
+    <p>DLegion Wars è progettato per adattarsi al tempo che hai a disposizione e al tuo stile di gioco (o del tuo gruppo di gioco). Tutte le modalità condividono le stesse regole di base (movimento, sparo, terreni), ma l'esperienza di gioco cambia radicalmente. Se hai poco tempo, una Battaglia veloce è l'ideale. Se cerchi una serata epica di intrighi e conquiste, la Campagna è la tua scelta. Se invece vuoi mettere alla prova la coordinazione con i tuoi amici contro un'orda spietata, entra in modalità Co-op.
+    Nota: le mappe sono sempre diverse, con infinite combinazioni, garantendo partite sempre nuove ed interessanti... e puoi anche personalizzare i tuoi eroi scegliendo tra 16 personaggi diversi per ogni fazione!</p>
+
+    <h3>⚔️ MODALITÀ 1: BATTAGLIA (Deathmatch Tattico)</h3>
+    <p><em>Da 1 a 8 Giocatori (supporta AI)</em><br>
+    La modalità più pura e adrenalinica. Partite singole ad alta intensità. Nessuna regola extra, solo tu, il tuo budget e l'obiettivo di distruggere gli avversari. Eccellente per i tornei e le sfide all'ultimo sangue. Le partite solitamente durano poco e questo porta a costanti richieste di "rivincita".  Si può giocare tutti contro tutti oppure formare squadre, ma si sa... l'alleanza è sempre temporanea, il tradimento è certo.</p>
+
+    <h3>🌐 MODALITÀ 2: CAMPAGNA GLOBALE (Grand Strategy)</h3>
+    <p><em>Da 2 a 4 Giocatori</em><br>
+    Dimentica le piccole scaramucce, qui si parla di dominare il globo. Il gioco si divide in due fasi:</p>
+    <ul>
+        <li>🔹 <strong>Fase Strategica:</strong> Ogni round, tutti pianificano le proprie mosse e stanziano fondi contemporaneamente in segreto. Puoi investire per estrarre minerali, costruire difese, Laboratori di potenziamento agenti, scatenare rivolte, infiltrare agenti e perfino lanciare Missili ICBM per Nuclearizzare un settore o bombardare con l'Artiglieria Globale, ma sopratutto potrete invadere nuovi territori!</li>
+        <li>🔹 <strong>Risoluzione e Battaglia:</strong> Se due giocatori occupano lo stesso settore, la visuale "zooma" e si gioca una vera Battaglia Tattica! I crediti investiti diventano i Punti Setup, rispecchiando la forza delle fazioni. Questa modalità è la principale per le "serate strategiche", richiede più impegno, ma porta anche più soddisfazioni.</li>
+    </ul>
+
+    <h3>🏗️ COSTRUZIONI E RICERCA (Esclusiva Campagna)</h3>
+    <p>Nella modalità Campagna, la vittoria si costruisce tra una battaglia e l'altra. Ogni settore che controlli è un'opportunità di espansione. Devi decidere se investire nel potenziamento dei tuoi soldati tramite i Laboratori (scelta saggia per chi ama il combattimento tattico) o se puntare sulla supremazia tecnologica con l'Artiglieria e le testate nucleari. Ricorda: un settore nuclearizzato è un settore che nessuno potrà usare per turni interi; usalo come difesa estrema per bloccare l'avanzata nemica.
+    Durante la Fase Strategica, cliccando su un settore sotto il tuo controllo, potrai spendere crediti per costruire strutture o sviluppare tecnologie. Le strutture si dividono in quattro categorie principali:</p>
+    
+    <h4 style="color: var(--accent-blue); margin-bottom: 5px;">💰 Economia e Difesa del Settore</h4>
+    <ul class="card-list">
+        <li><span class="emoji">⛏️</span><div class="text-content"><strong>Miniera:</strong> Aumenta permanentemente la rendita di +1 crediti generata da quel settore ad ogni turno.</div></li>
+        <li><span class="emoji">🏰</span><div class="text-content"><strong>Fortezza:</strong> Rende il settore immune agli attacchi di Artiglieria e fornisce un bonus gratuito di crediti in difesa in caso di battaglia. Tuttavia, mantenere la fortezza riduce la rendita economica del settore di -2 crediti.</div></li>
+        <li><span class="emoji">🛸</span><div class="text-content"><strong>Droni-Mina:</strong> Trappola monouso. Se i nemici attaccano questo settore, l'intero esercito attaccante viene spazzato via prima ancora che la battaglia inizi.</div></li>
+    </ul>
+
+    <h4 style="color: var(--accent-gold); margin-bottom: 5px;">🧬 Laboratori Biologici (Potenziamenti Globali)</h4>
+    <p style="font-size: 0.9em; color: #888; margin-top: 0;"><em>Questi edifici forniscono un bonus permanente a TUTTI i tuoi agenti durante le battaglie tattiche.</em></p>
+    <ul class="card-list">
+        <li><span class="emoji">🛡️</span><div class="text-content"><strong>Lab. Armature:</strong> +1 Punto Vita (HP) base a tutti i tuoi agenti.</div></li>
+        <li><span class="emoji">🦿</span><div class="text-content"><strong>Lab. Gambe:</strong> +1 Passi (MOV) base a tutti i tuoi agenti.</div></li>
+        <li><span class="emoji">🦾</span><div class="text-content"><strong>Lab. Braccia:</strong> +1 Gittata di Tiro (RNG) base a tutti i tuoi agenti.</div></li>
+        <li><span class="emoji">⚔️</span><div class="text-content"><strong>Lab. Armi:</strong> +1 Danno (DMG) base a tutti i tuoi agenti.</div></li>
+    </ul>
+
+    <h4 style="color: var(--accent-red); margin-bottom: 5px;">🚀 Armi Strategiche</h4>
+    <ul class="card-list">
+        <li><span class="emoji">🛩️</span><div class="text-content"><strong>Hangar:</strong> Aumenta di 1 la distanza a cui puoi dichiarare attacchi standard sulla mappa globale.</div></li>
+        <li><span class="emoji">🎯</span><div class="text-content"><strong>Artiglieria:</strong> Consente di bombardare a distanza. Distrugge istantaneamente il 50% dei crediti investiti in difesa nel settore bersaglio e rade al suolo tutti i suoi upgrade (tranne le Fortezze).</div></li>
+        <li><span class="emoji">☢️</span><div class="text-content"><strong>Silo Nucleare:</strong> Sblocca il temibile e costoso ordine di "Nuclearizzare". Rade al suolo un settore adiacente: i crediti in difesa evaporano e l'area diventa "Zona Contaminata" (inagibile e bloccata) per diversi turni.</div></li>
+        <li><span class="emoji">🚀</span><div class="text-content"><strong>Missili ICBM:</strong> La tecnologia definitiva. Rende globale la gittata sia dell'Artiglieria che del Silo Nucleare, permettendoti di colpire ovunque.</div></li>
+    </ul>
+
+    <h4 style="color: #a0aabf; margin-bottom: 5px;">🕶️ Operazioni Coperte</h4>
+    <ul class="card-list">
+        <li><span class="emoji">🕵️</span><div class="text-content"><strong>Infiltrati:</strong> Permette di lanciare un singolo attacco a sorpresa contro un settore ovunque sulla mappa (ignorando le distanze). Non funziona contro le Fortezze. Effetto monouso.</div></li>
+        <li><span class="emoji">✊</span><div class="text-content"><strong>Rivolta:</strong> Scatena il caos globale. Tutti i settori sulla mappa difesi debolmente (con meno di 4 crediti) si ribellano e tornano neutrali, indipendentemente da chi li possedeva. Effetto monouso.</div></li>
+        <li><span class="emoji">🚧</span><div class="text-content"><strong>Bonifica:</strong> Un'operazione per ripulire una "Zona Contaminata" (da scorie nucleari o inagibile dall'inizio), rendendola nuovamente un settore neutrale e conquistabile.</div></li>
+    </ul>
+
+    <h3>🧟 MODALITÀ 3: CO-OP (Avventura Survival RPG)</h3>
+    <p><em>Da 1 a 4 Giocatori, Umani vs IA </em><br>
+    Unite le forze in questa modalità epica e brutale. I giocatori scelgono i loro avatar e li equipaggiano, partendo a Sud di un'enorme mappa inesplorata infestata da un'orda di mostri controllati dall'IA. L'Obiettivo: Esplorare verso Nord, trovare il BOSS, eliminarlo recuperando la reliquia che trasporta, ed infine fuggire dalle terre infestate. Nel corso dell'avventura i giocatori possono potenziare i loro personaggi, reclutare nuovi personaggi, coordinarsi per risolvere quest variegate e ... sterminare tanti mostri!
+    Potrete rallentare la generazione di mostri distruggendo le tane da cui fuoriescono, o incontrare villaggi che vi forniranno crediti di supporto ed in cui potrete resuscitare i compagni caduti o reclutare nuovi agenti per formare il vostro "war party".
+    Grazie alla nebbia di guerra vedrete solo ciò che è nel campo visivo dei vostri agenti (distanza determinata dall'abilità di tiro).
+    Il numero di mostri aumenta dinamicamente all'aumentare dei giocatori umani, mantenendo la sfida sempre bilanciata. 
+    </p>
+    
+    <h2>🧠 CONSIGLI PER IL COMANDANTE</h2>
+    <ul class="card-list">
+        <li><div class="text-content"><strong>Pianifica i Punti Azione:</strong> Ricorda che puoi combinare le azioni nell'ordine che preferisci, puoi agire con un agente, poi usarne un altro, e poi riprendere ad usare il primo agente se ha ancora AP. Ricordati di pianificare per usare le carte tattica al meglio e di non restare scoperto a fine turno.<br> - move divided, fight united -</div></li>
+        <li><div class="text-content"><strong>Proteggi la Base (HQ):</strong> Se il tuo HQ cade, perdi il reddito fisso e non puoi più reclutare... e se è un duello hai pure perso la partita!<br> - War does not determine who is right...only who is left - </div></li>
+        <li><div class="text-content"><strong>Sfrutta il Terreno:</strong> I bonus del terreno non sono lì solo per bellezza, pianifica per usarlo a tuo vantaggio, tendi trappole ad avversari distratti.<br> - In nature there are neither rewards nor punishments; there are consequences - </div></li>
+        <li><div class="text-content"><strong>Prevedi le Mosse dell'Avversario:</strong> Preparare la contromossa giusta può ribaltare le sorti sia in battaglia che nella campagna! Se riesci a capire cosa intende fare il tuo avversario, prepara la contromossa e ribalterai le sue stesse azioni a tuo vantaggio!<br> - In war there is no substitute for victory - </div></li>
+        <li><div class="text-content"><strong>In Co-op Vince il Gioco di Squadra:</strong> I mostri si accaniscono sul giocatore più vicino a loro. Copritevi a vicenda! Pianificate azioni combinate tra più giocatori! Agire da soli equivale a morte certa.<br> - The whole is greater than the sum of its parts -</div></li>
+        <li><div class="text-content"><strong>Puoi fare pratica anche da solo contro l'AI:</strong> Nelle battaglie e in modalità coop puoi giocare da solo contro l'AI. E' un buon allenamento e puoi testare le tue strategie. Se invece hai bisogno si un ambiente più "sicuro", puoi avviare una partita in locale con 2 giocatori e gestirli entrambi tu stesso, utilissimo per sperimentare il funzionamento di certe carte o combinazioni.<br> - Si vis pacem, para bellum -</div></li>
+    </ul>
+
+    <p style="text-align: center; font-size: 1.2em; margin-top: 50px; color: var(--accent-gold);">
+        <em>La fortuna è un'illusione per chi non sa guardare; la tattica è l'unica realtà che conta. Il campo di battaglia non aspetta altro che di essere plasmato dal tuo genio, Comandante. Rendi ogni tua scelta un atto di supremazia... e assapora ogni istante della tua ascesa.</em>
+    </p>
+
+    <!-- FIRMA E CHIUSURA -->
+    <p style="text-align: center; font-size: 1.1em; color: var(--accent-green); font-weight: bold; letter-spacing: 4px; margin-top: 0; text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);">
+        BY DLEGION
+    </p>
+
+
+    <!-- SEZIONE RINGRAZIAMENTI -->
+    <div class="credits-section">
+        <p>Si ringraziano per betatest e supporto:<br>
+        <strong>Alberto “Shadenight”, Alex “Mind”, Andrea “Xanpip”, Francesco “Dolf”, Lorenzo “Larry”, Marco “Shub”, Patrick “Conan”, Veronica “Mela”</strong>,<br>
+        e tutti gli altri che hanno contribuito in qualsiasi modo allo sviluppo del gioco!</p>
+        
+        <p style="margin-top: 20px;">Per info e critiche costruttive rivolgetevi a <strong>Delfino Daniele "DLEGION"</strong>:<br>
+        <a href="mailto:ddelfino@hotmail.com" class="email-link">ddelfino@hotmail.com</a></p>
+    </div>
+
+</div>
+
+</body>
+</html>
