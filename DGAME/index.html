@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, touch-action=none">
+    <title>DLEGION WARS</title>
+    
+    
+
+    <link rel="stylesheet" href="style.css?v=219">
+
+
+
+    <!-- ✅ SPOSTATI QUI DENTRO PER FUNZIONARE: -->
+    <!-- Per iOS (iPad) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DLEGION WARS">
+
+    <!-- Per Android/Chrome -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+</head> <!-- Il tag di chiusura ora è DOPO i meta tag -->
+<body>
+
+<!-- 🔴 NUOVO: SCHERMATA DI CARICAMENTO -->
+<div id="loading-screen">
+    <div id="loading-container">
+        <div class="loading-spinner"></div>
+        <div id="loading-text">INIZIALIZZAZIONE SISTEMA...</div>
+        <!-- Il tasto appare solo quando ha finito o se va in timeout -->
+        <button id="start-game-btn" style="display:none;" onclick="initGameEngine()">PLAY</button>
+    </div>
+</div>
+<!-- Fine schermata di caricamento -->
+
+<div id="background-layer"></div>
+<button id="audio-toggle" onclick="toggleMusic()">🎵 OFF</button>
+<button id="legend-toggle-btn" onclick="toggleLegend()">ℹ️ INFO</button>
+<button id="btn-surrender" onclick="surrenderCurrentPlayer()" style="display:none;">🏳️ RESA</button>
+
+<div id="game-layout">
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="ui-panel" id="legend-panel">
+        <h2>Legenda</h2>
+        <div class="legend-item">
+            <div class="hex-icon">
+                <svg viewBox="0 0 100 115"><polygon points="50,1 99,29 99,86 50,114 1,86 1,29" fill="rgba(0, 255, 255, 0.25)" stroke="#00ffff" stroke-width="4"/></svg>
+            </div>
+            <span>Zona di Movimento<br><span style="color:#888; font-size:14px"></span></span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon">
+                <svg viewBox="0 0 100 115"><polygon points="50,1 99,29 99,86 50,114 1,86 1,29" fill="rgba(255, 51, 51, 0.3)" stroke="#ff3333" stroke-width="4"/></svg>
+            </div>
+            <span>Bersagli Possibili</span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon agent-hex" style="display:flex; justify-content:center; align-items:center">
+                <div id="ally-dot" style="width:12px; height:12px; border-radius:50%; background:var(--active-faction-color); box-shadow: 0 0 5px var(--active-faction-color); transition: background 0.4s, box-shadow 0.4s;"></div>
+            </div>
+            <span>Agente Alleato</span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center">
+                <div style="width:16px; height:16px; background:#444; border:2px dashed #888"></div>
+            </div>
+            <span style="color:#888 !important">Barricata / Muro<br><span style="color:#888; font-size:14px">(Distruttibili)</span></span>
+        </div>
+        
+        <!-- NUOVA VOCE: Punto di Controllo -->
+        <div class="legend-item">
+            <div class="hex-icon">
+                <svg viewBox="0 0 100 115">
+                    <!-- Bordo Esagono Tratteggiato -->
+                    <polygon points="50,1 99,29 99,86 50,114 1,86 1,29" fill="rgba(136, 136, 136, 0.1)" stroke="#888" stroke-width="3" stroke-dasharray="8,6"/>
+                    <!-- La grande X centrale -->
+                    <line x1="32" y1="39.5" x2="68" y2="75.5" stroke="#888" stroke-width="8" stroke-linecap="round"/>
+                    <line x1="68" y1="39.5" x2="32" y2="75.5" stroke="#888" stroke-width="8" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span style="color:#aaa !important">Punto di Controllo<br><span style="color:#888; font-size:14px">(+1 credito a turno)</span></span>
+        </div>
+
+                <!-- 🔴 INIZIO NUOVI TERRENI 🔴 -->
+        
+        <!-- NUOVO BLOCCO ACQUA -->
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size:22px;">🌊</div>
+            <span style="color:#aaa !important">Acqua<br><span style="color:#888; font-size:14px">(blocca solo il movimento)</span></span>
+        </div>
+        <!-- FINE BLOCCO ACQUA -->
+
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size:22px;">🟤</div>
+            <span style="color:#aaa !important">Fango<br><span style="color:#888; font-size:14px">(movimento solo 1 passo)</span></span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size:22px;">☁️</div>
+            <span style="color:#aaa !important">Nebbia<br><span style="color:#888; font-size:14px">(bersagliabile solo da caselle adiacenti)</span></span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size:22px;">⛰️</div>
+            <span style="color:#aaa !important">Altura<br><span style="color:#888; font-size:14px">(+1 alla gittata di tiro)</span></span>
+        </div>
+        <div class="legend-item">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size:22px;">🛡️</div>
+            <span style="color:#aaa !important">Copertura<br><span style="color:#888; font-size:14px">(-1 al danno ricevuto)</span></span>
+        </div>
+        <!-- 🔴 FINE NUOVI TERRENI 🔴 -->
+
+        <div class="legend-item" style="margin-bottom: 0;">
+            <div class="hex-icon" style="display:flex; justify-content:center; align-items:center; font-size: 18px;">🏆</div>
+            <span style="font-size: 18px;">OBIETTIVO : eliminare tutte le basi o gli agenti nemici</span>
+        </div>
+
+        <!-- INIZIO NUOVO PULSANTE MANUALE -->
+        <div style="margin-top: 15px; border-top: 1px solid #333; padding-top: 15px; text-align: center;">
+            <button class="action-btn" onclick="window.open('manuale.html', '_blank')" style="width: 100%; padding: 12px; border: 2px solid #00aaff; color: #00aaff; background: rgba(0, 170, 255, 0.1); cursor: pointer; font-size: 16px; font-weight: bold;">
+                📖 MANUALE DI GIOCO
+            </button>
+        </div>
+        <!-- FINE NUOVO PULSANTE MANUALE -->
+
+        <!-- Riga unificata con Flexbox: ID a sinistra, Versione a destra -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px; border-top: 1px solid #333; padding-top: 5px; font-family: var(--font-stack);">
+            
+            <div id="legend-session-id" style="display:none; text-align:left;">
+                <div style="font-size:10px; color:#888; line-height:1; margin-bottom:3px;">🔗 ID PARTITA</div>
+                <div id="legend-session-id-value" style="font-size:14px; color:#FFD700; font-weight:bold; letter-spacing:1px; cursor:pointer;" title="Clicca per copiare"></div>
+            </div>
+            
+            <div style="font-size: 18px; color: #888; opacity: 0.6; margin-left: auto;">
+                v0.666
+            </div>
+            
+        </div>
+    </div>
+
+    <div class="ui-panel" id="controls-panel">
+        <div id="turn-header">
+            <span id="action-points-display" style="color:#fff; font-weight:bold; font-size:22px;">AP: 3/3</span>
+            <span id="current-turn-text">Turno Verde</span>
+        </div>
+
+        <div class="action-btn-group">
+            <button class="action-btn" id="btn-move"  onclick="setActionMode('move')">
+                <span class="btn-top-row"><span class="btn-emoji">👣</span><span class="btn-cost">1</span></span>
+                <span class="btn-label">Muovi</span>
+            </button>
+            <button class="action-btn" id="btn-shoot" onclick="setActionMode('shoot')">
+                <span class="btn-top-row"><span class="btn-emoji">⚔️</span><span class="btn-cost">1</span></span>
+                <span class="btn-label">Attacca</span>
+            </button>
+            <button class="action-btn" id="btn-build" onclick="setActionMode('build')">
+                <span class="btn-top-row"><span class="btn-emoji">🚧</span><span class="btn-cost">2</span></span>
+                <span class="btn-label">Barricata</span>
+            </button>
+            <button class="action-btn" id="btn-heal"  onclick="setActionMode('heal')">
+                <span class="btn-top-row"><span class="btn-emoji">💚</span><span class="btn-cost">2</span></span>
+                <span class="btn-label">Cura</span>
+            </button>
+        </div>
+
+        <div id="game-message-board" style="font-size:18px; color:#aaa; margin-bottom:10px; min-height:1.2em">Seleziona un agente.</div>
+
+        <div id="selected-agent-info" style="display:none; margin-bottom: 12px; font-size: 16px; border-top: 1px solid #333; padding-top: 10px; flex-direction:column; gap:4px;">
+            <span><span class="stat-label-info" style="display:inline-block; width:70px; color:#888;">HP:</span><span id="info-hp" style="color:#fff"></span></span>
+            <span><span class="stat-label-info" style="display:inline-block; width:70px; color:#888;">Passi:</span><span id="info-mov" style="color:var(--move-neon)"></span></span>
+            <span><span class="stat-label-info" style="display:inline-block; width:70px; color:#888;">Tiro:</span><span id="info-rng" style="color:var(--atk-neon)"></span></span>
+            <span><span class="stat-label-info" style="display:inline-block; width:70px; color:#888;">Danno:</span><span id="info-dmg" style="color:#ff8800"></span></span>
+        </div>
+
+        <!-- PANNELLO CARTE IN-GAME -->
+        <div id="ingame-cards-panel" style="border-top:1px solid #333; margin-top:10px; padding-top:10px;">
+            <div id="cards-panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="color:#888; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🃏 Carte</span>
+                <span id="cards-used-label" style="color:#555; font-size:11px;"></span>
+            </div>
+            <div id="ingame-card-slots" style="display:flex; gap:6px; justify-content:center;"></div>
+        </div>
+
+        <!-- PULSANTE NASCOSTO: Necessario per non rompere il JavaScript -->
+        <button class="action-btn" id="btn-end-turn" onclick="endTurn()" style="display: none;"></button>
+        
+    </div>
+
+    <div id="setup-overlay">
+        <div id="setup-box" class="p1-theme">
+            <div id="setup-header">
+                <h1 id="setup-title" class="text-p1">Fase Setup: Fazione Verde</h1>
+                <!-- Raggruppa crediti e pulsante sulla stessa riga -->
+                <div style="display:flex; justify-content:center; align-items:center; gap:15px; margin-bottom:10px;">
+                    <div id="setup-points-display">
+                        <span id="pts-count" style="font-weight:bold; font-size:1.4em">30</span>
+                    </div>
+                    <button class="action-btn p1-theme" onclick="addNewAgentToMarket()"
+                            style="font-size:12px; padding:10px 20px; margin:0;">
+                        + Nuovo Agente (Costo: 4)
+                    </button>
+                </div>
+            </div>
+            <div id="agents-market"></div>
+            <!-- Raggruppa il pulsante Pronto (che si espande) e lascia spazio per l'AI -->
+            <div id="setup-footer" style="display:flex; gap:10px; align-items:stretch; width:100%;">
+                <button class="action-btn p1-theme" id="confirm-setup-btn" onclick="confirmPlayerSetup()"
+                        style="flex:1; font-size:16px; padding:15px; margin:0;">
+                    PRONTO
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="network-menu" style="position:fixed; top:0; left:0; width:100%; height:100%;
+     background:#050509; z-index:2000; display:flex; flex-direction:column;
+     align-items:center; justify-content:flex-start; overflow-y:auto; padding: 40px 0; 
+     box-sizing: border-box; font-family:'Courier New',monospace;">
+     <div id="menu-intro-bg"></div>
+    <div style="text-align:center; margin-bottom:40px; line-height:1;">
+        <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:10px;">
+        </div>
+        <div class="game-title-container">
+        <h1 class="game-main-title" id="game-title-text">
+            <span class="title-dlegion">DLEGION</span> 
+            <span class="title-wars">WARS</span>
+        </h1>
+            <img src="img/titolo.png" alt="" class="title-fallback-img"
+                 onload="document.getElementById('game-title-text').style.visibility='hidden';"
+                 onerror="this.style.display='none';">
+            </div>
+        </div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; margin-top:40px;">
+    <!-- LOCALE -->
+        <button class="action-btn" onclick="showLocalMenu()"
+        style="padding:20px; border:2px solid #00ff88; color:#00ff88; font-size: 20px !important; background:rgba(0,255,136,0.08); cursor:pointer; display:inline-flex; align-items:center; border-radius:12px; box-shadow:0 0 10px #00ff88 inset, 0 0 20px #00ff88, 0 0 45px #00ff8899;">
+            <span style="font-size:2em; line-height:0; margin-right:10px; position:relative; top:2px;">📱</span> LOCALE
+        </button>
+    <!-- ONLINE -->
+        <button class="action-btn" onclick="showOnlineMenu()"
+        style="padding:20px; border:2px solid #cc00ff; color:#cc00ff; font-size: 20px !important; background:rgba(204,0,255,0.08); cursor:pointer; display:inline-flex; align-items:center; border-radius:12px; box-shadow:0 0 10px #cc00ff inset, 0 0 20px #cc00ff, 0 0 45px #cc00ff99;">
+            <span style="font-size:2em; line-height:0; margin-right:10px; position:relative; top:2px;">🌍</span> ONLINE
+        </button>
+    </div>
+
+    <!-- 🟢 FIX PER LOCAL OPTIONS (Layout Allineato a Sinistra) -->
+    <div id="local-options" style="display:none; margin:30px auto 0 auto; width:100%; max-width:480px; box-sizing:border-box; padding: 0 15px;">
+    
+    <!-- SEZIONE BATTAGLIA -->
+    <div style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 25px; border-top: 1px solid #333; padding-top: 15px; overflow: visible;">
+        <div style="display: flex; align-items: center; margin-bottom: 15px;">
+            <!-- Larghezza aumentata a 75px per spostare il testo a destra -->
+            <div style="width: 175px; height: 30px; position: relative; flex-shrink: 0;">
+                <!-- Opacità impostata a 1 (Totalmente opaco) -->
+                <img src="img/battle.png" style="height: 60px; position: absolute; top: 50%; left: -5px; transform: translateY(-50%); pointer-events: none; opacity: 1; z-index: 0;">
+            </div>
+            <span style="color: #00ff88; font-size: 18px; text-transform: uppercase; font-weight: bold; letter-spacing: 2px; position: relative; z-index: 1;">Battaglia</span>
+        </div>
+        <div style="display:flex; gap:4px; flex-wrap: nowrap; width: 100%; box-sizing: border-box;">
+            <button class="action-btn local-num-btn" onclick="startLocalGame(2)">2P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(3)">3P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(4)">4P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(5)">5P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(6)">6P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(7)">7P</button>
+            <button class="action-btn local-num-btn" onclick="startLocalGame(8)">8P</button>
+        </div>
+    </div>
+
+    <!-- SEZIONE CAMPAGNA -->
+    <div style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 25px; border-top: 1px solid #333; padding-top: 15px;">
+      <div style="display: flex; align-items: center; margin-bottom: 15px;">
+        <div style="width: 175px; height: 30px; position: relative; flex-shrink: 0;">
+            <img src="img/campagna.png" style="height: 60px; position: absolute; top: 50%; left: -5px; transform: translateY(-50%); pointer-events: none; opacity: 1; z-index: 0;">
+        </div>
+        <span style="color: #cc00ff; font-size: 18px; text-transform: uppercase; font-weight: bold; letter-spacing: 2px; position: relative; z-index: 1;">Campagna</span>
+      </div>
+      
+      <!-- FIX FINALE: Padding verticale e font identici per tutti -->
+      <div style="display:flex; gap:4px; flex-wrap: nowrap; width: 100%; box-sizing: border-box;" id="local-camp-btns">
+          <button class="action-btn local-num-btn" onclick="attemptStartCampaign(2)" style="border-color:#cc00ff !important; color:#cc00ff !important; font-size: 14px !important; white-space:nowrap; padding: 8px 0 !important;">CAMP 2P</button>
+          <button class="action-btn local-num-btn" onclick="attemptStartCampaign(3)" style="border-color:#cc00ff !important; color:#cc00ff !important; font-size: 14px !important; white-space:nowrap; padding: 8px 0 !important;">CAMP 3P</button>
+          <button class="action-btn local-num-btn" onclick="attemptStartCampaign(4)" style="border-color:#cc00ff !important; color:#cc00ff !important; font-size: 14px !important; white-space:nowrap; padding: 8px 0 !important;">CAMP 4P</button>
+          <!-- Il tasto LOAD -->
+          <button class="action-btn local-num-btn" id="btn-local-load-camp" onclick="showCampaignMenu()" style="border-color:#FFD700 !important; color:#FFD700 !important; font-size: 14px !important; display:none; padding: 8px 0 !important;">LOAD</button>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- 🟢 FIX PER ONLINE OPTIONS -->
+    <div id="online-options" style="display:none; margin:30px auto 0 auto; text-align:center; border-top:1px solid #333; padding-top:20px; width:100%; max-width:480px; padding-left:16px; padding-right:16px; box-sizing:border-box;">
+        <!-- Contenuto generato dinamicamente da multiplayer.js -->
+    </div>
+</div>
+
+<!-- Container Mappa Campagna -->
+<div id="campaign-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,10,20,0.95); z-index:90000; flex-direction:column; align-items:center; justify-content:center; font-family:'Courier New',monospace;">
+    <h1 id="campaign-title" style="color:#fff; text-shadow:0 0 10px #fff; margin-bottom: 10px;">MAPPA SETTORI</h1>
+    <h3 id="campaign-turn-info" style="color:#aaa; margin-bottom: 30px;">Turno di: </h3>
+    <div id="campaign-map" style="display:grid; grid-template-columns:repeat(3, 100px); grid-template-rows:repeat(3, 100px); gap:20px;">
+        <!-- I settori verranno generati dal JS -->
+    </div>
+</div>
+
+<script src="peerjs.min.js"></script>
+
+           <script src="constants.js?v=219"></script>
+           <script src="gamelogic.js?v=219"></script>
+                <script src="core.js?v=219"></script>
+               <script src="cards.js?v=219"></script>
+                 <script src="map.js?v=219"></script>
+             <script src="carduse.js?v=219"></script>
+                  <script src="ai.js?v=219"></script>
+             <script src="credits.js?v=219"></script>
+        <script src="network_core.js?v=219"></script>
+        <script src="network_sync.js?v=219"></script>
+               <script src="setup.js?v=219"></script>
+   <script src="campaign_upgrades.js?v=219"></script>
+        <script src="campaign_map.js?v=219"></script>
+     <script src="campaign_battle.js?v=219"></script>
+<script src="campaign_multiplayer.js?v=219"></script>
+                <script src="coop.js?v=219"></script>
+                <script src="main.js?v=219"></script>
+
+</body>
+</html>
