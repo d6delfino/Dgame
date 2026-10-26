@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DawnlorD v0.666</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;height:100vh;height:100dvh;display:flex;overflow:hidden;background:#000;color:#e5e7eb;font-family:"Trebuchet MS",system-ui,sans-serif}
+aside{width:280px;flex-shrink:0;padding:12px 12px 45px 12px;background:#000;border-right:1px solid #1f2937;overflow-y:auto}
+h1{font-size:18px;margin:0 0 10px}
+h1 .d{color:var(--fz,#22c55e)}   /* le due "D" del titolo: colore della fazione di turno (--fz, impostata da updateUI), verde finché non c'è un giocatore */
+#fpsBox{float:right;margin-top:3px;font-size:11px;font-weight:normal;font-variant-numeric:tabular-nums;color:#9ca3af}
+h2{font-size:14px;margin:12px 0 4px;color:#9ca3af}
+h2.lt{font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 6px;padding:4px 8px;border-left:4px solid currentColor;background:rgba(255,255,255,.06);border-radius:0 6px 6px 0;text-shadow:0 0 8px currentColor}   /* titoli della legenda: più grandi, in maiuscolo, con barra e alone del proprio colore */
+h2.lt1{color:#4ade80}   /* terreni: verde brillante */
+h2.lt2{color:#fbbf24}   /* edifici: ambra */
+h2.lt3{color:#f472b6}   /* azioni speciali: rosa */
+h2.lt4{color:#22d3ee}   /* regole: ciano */
+#status{padding:8px 10px;border-radius:6px;background:#1f2937;border-left:6px solid #888;font-size:14px;line-height:1.4}
+button,select{background:#334155;color:#fff;border:0;border-radius:6px;padding:9px 12px;margin:3px 3px 3px 0;font-size:14px;font-family:inherit}
+button:disabled{opacity:.35}
+#placeBtn{background:#15803d}
+.leg{font-size:12px;line-height:1.35;margin:4px 0}
+main{flex:1;min-width:0;min-height:0;overflow:hidden;background:#000;position:relative}
+#board{display:block;touch-action:none;cursor:pointer}
+#menu{display:none;position:absolute;top:76px;right:10px;width:min(260px,60vw);max-height:calc(100% - 100px - env(safe-area-inset-bottom, 0px));overflow-y:auto;padding:12px 12px 30px 12px;background:#000;border:1px solid #374151;border-radius:10px}
+#menu h3{margin:0 0 8px;font-size:16px}
+#menu hr{border:0;border-top:1px solid #374151;margin:8px 0}
+#menu button{display:block;width:100%;margin:5px 0;text-align:left; background:var(--btn-bg, #334155); transition:background 0.2s}
+#menu button:hover:not(:disabled){background:var(--btn-bg-hover, #475569)}
+.mstat{display:flex;justify-content:space-between;align-items:center;font-size:14px;margin:4px 0}
+.pips{color:#facc15;letter-spacing:2px}
+#menu .em{font-size:1.5em;line-height:0;vertical-align:-.1em}   /* emoji dei menu +50% senza cambiare l'altezza di righe e pulsanti */
+#menu button.sbtn{display:inline-block;width:auto;margin:0 4px;padding:4px 14px}
+#topbar{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;pointer-events:none}
+#turnBtn{margin:0;padding:6px 18px;background:rgba(17,24,39,.92);border:3px solid #888;border-radius:10px;text-align:center;line-height:1.25;cursor:pointer;pointer-events:auto}
+#resBox{position:absolute;left:calc(100% + 8px);top:0;display:grid;gap:3px}
+.rc{font-size:12px;font-weight:bold;padding:2px 7px;border:2px solid #888;border-radius:8px;text-align:center;white-space:nowrap;color:#fff;background:rgba(17,24,39,.92)}
+/* ---- schermata d'apertura: solo immagine + lobby ---- */
+#intro{display:none;position:absolute;inset:0;z-index:6;background:#000;overflow:hidden}
+#intro::before{content:"";position:absolute;inset:0;background:url(img/intro2.png) center/cover no-repeat;opacity:.15;animation:introSlowPulse 10s ease-in-out infinite alternate}
+@keyframes introSlowPulse{0%{transform:scale(1);opacity:.15}100%{transform:scale(1.16);opacity:1}}
+body.intro-on #intro,body.pick-on #intro{display:block}
+body.intro-on aside,body.intro-on #sideBtn,body.intro-on #board,body.intro-on #topbar,body.pick-on aside,body.pick-on #sideBtn{display:none}
+body.intro-on #colorpick{display:none!important}
+/* ---- schermata di scelta della fazione (prima della mappa) ---- */
+#colorpick{display:none;position:absolute;inset:0;z-index:7;overflow:hidden;background:linear-gradient(rgba(0,0,0,.62),rgba(0,0,0,.84)),#000 url(img/intro2.png) center/cover no-repeat;user-select:none;-webkit-user-select:none;animation:pickFadeIn 1.2s ease-in-out}
+@keyframes pickFadeIn{0%{opacity:0}100%{opacity:1}}
+
+/* ---- AGGIUNTA: Stile per lo sfondo a pieno schermo della fazione ---- */
+#facBg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:1;transition:background-image .5s ease-in-out;pointer-events:none;z-index:1}
+#colorpick .facwrap{position:absolute;left:50%;top:50%;width:min(94vmin,760px);aspect-ratio:1;transform:translate(-50%,-50%);z-index:2}
+#colorpick #facmid{position:absolute;left:50%;top:50%;width:44%;transform:translate(-50%,-50%);text-align:center;text-shadow:0 1px 4px #000,0 0 8px #000;z-index:2}
+#colorpick .fac{position:absolute;transform:translate(-50%,-50%);cursor:pointer;filter:drop-shadow(0 0 4px rgba(0,0,0,.85));transition:left .45s ease,top .45s ease,width .45s ease,height .45s ease,filter .3s}
+#colorpick .fac.sel{z-index:2;filter:drop-shadow(0 0 16px var(--fc)) drop-shadow(0 0 3px #fff)}
+#colorpick .facbd,#colorpick .facin{position:absolute;clip-path:polygon(29.3% 0,70.7% 0,100% 29.3%,100% 70.7%,70.7% 100%,29.3% 100%,0 70.7%,0 29.3%)}
+#colorpick .facbd{inset:0;background:var(--fc)}
+#colorpick .facin{inset:4.5%;background:#0b1020;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:clamp(11px,2.4vmin,20px);color:var(--fc)}
+#colorpick .facin img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+#colorpick .fac.taken{cursor:not-allowed;filter:grayscale(1) brightness(.4)}
+#colorpick .fac.taken .facin::after{content:'✕';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(24px,8vmin,64px);color:#fff;background:rgba(0,0,0,.45)}
+#colorpick #facmid{position:absolute;left:50%;top:50%;width:44%;transform:translate(-50%,-50%);text-align:center;text-shadow:0 1px 4px #000,0 0 8px #000}
+#colorpick #facTitle{font-size:clamp(11px,2.3vmin,19px);color:#e5e7eb;line-height:1.25}
+#colorpick #facName{font-size:clamp(20px,6.5vmin,52px);font-weight:bold;margin:.15em 0 .3em}
+#colorpick #facOk{margin:0;padding:.55em 1.2em;font-size:clamp(13px,2.6vmin,20px);font-weight:bold;cursor:pointer;transition:all .2s ease;
+  background:rgba(0,0,0,.5);border:2px solid var(--fc,#00ff88);color:var(--fc,#00ff88);
+  box-shadow:0 0 10px var(--fc50,rgba(0,255,136,.5)),inset 0 0 8px var(--fc25,rgba(0,255,136,.25))}
+#colorpick #facOk:hover:not(:disabled){background:var(--fc20,rgba(0,255,136,.2));box-shadow:0 0 22px var(--fc,#00ff88)}
+#turnBtn *{pointer-events:none}
+#turnBtn:focus,#turnBtn:focus-visible{outline:none}
+#turnBtn .tn{display:block;font-size:12px;color:#cbd5e1}
+#turnBtn .tt{display:block;font-size:20px;font-weight:bold}
+#turnBtn.low .tt{color:#ef4444}
+#winner{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:22px 34px;text-align:center;font-size:24px;background:rgba(0,0,0,.88);border:3px solid #facc15;border-radius:14px}
+#winner .leg{font-size:14px;margin:8px 0 12px}
+#lobby{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(380px,92%);padding:18px;background:none;border:none;z-index:8;text-align:center;text-shadow:0 1px 3px #000;transition:opacity 1s ease-out,transform 1s ease-out}
+body.lobby-wait #lobby{visibility:hidden;opacity:0;transform:translate(-50%,-46%) scale(.96)}   /* primi 3 secondi: menu nascosto (poi compare sfumando) */
+
+/* ---- scritta scorrevole stile Star Wars sopra i pulsanti della lobby ---- */
+#crawl{--ch:min(34vh,260px);position:absolute;left:50%;bottom:100%;transform:translateX(-50%);width:min(520px,94vw);height:var(--ch);overflow:hidden;perspective:300px;pointer-events:none;
+  -webkit-mask-image:linear-gradient(to top,#000 50%,transparent 100%);mask-image:linear-gradient(to top,#000 50%,transparent 100%)}   /* sfuma in alto, come nel film */
+#crawlTxt{position:absolute;left:0;right:0;top:var(--ch);transform-origin:50% 100%;text-align:justify;font-weight:bold;font-size:clamp(15px,3.2vmin,22px);line-height:1.5;color:#ffd54a;
+  text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 -2px 0 #000,0 2px 0 #000,-2px 0 0 #000,2px 0 0 #000,0 0 8px #000;   /* contorno nero + alone */
+  animation:crawlUp 51s linear 5s infinite backwards}   /* 51s = 45s di scorrimento + 6s di pausa; 8s = attesa iniziale */
+#crawlTxt p{margin:0 0 .8em}
+@keyframes crawlUp{
+  0%{transform:rotateX(25deg) translateY(100%);opacity:1}                                /* parte tutto sotto il riquadro: non si vede nulla */
+  82%{opacity:1}
+  88.235%,100%{transform:rotateX(25deg) translateY(calc(-3*var(--ch) - 100%));opacity:0}   /* 88.235% = 45s / 51s: il testo è salito e svanito del tutto; poi pausa */
+}
+#lobby .lrow{margin:12px 0}
+#lobby input{background:#000;color:#fff;border:1px solid #475569;border-radius:6px;padding:9px 12px;font-size:16px;width:150px;text-transform:uppercase;text-align:center}
+#lobby .code{font-size:32px;font-weight:bold;letter-spacing:5px;color:#facc15;margin:6px 0}
+#lobLink{word-break:break-all;color:#93c5fd}
+
+/* ---- Pulsanti della schermata iniziale: stile neon del vecchio gioco ---- */
+#lobN, #lobBots, #lobMode {background:#000;border:1px solid #22c55e}
+#lobCreate,#lobJoin,#lobLocal,#lobResume,#lobLeave{background:rgba(0,0,0,.5);border-width:2px;border-style:solid;font-weight:bold;cursor:pointer;transition:all .2s ease}
+
+/* 1. HOST: verde neon */
+#lobCreate{border-color:#00ff88;color:#00ff88;box-shadow:0 0 10px rgba(0,255,136,.5),inset 0 0 8px rgba(0,255,136,.25)}
+#lobCreate:hover{background:rgba(0,255,136,.2);box-shadow:0 0 22px #00ff88}
+
+/* 2. Codice e CLIENT: viola neon */
+#lobCode{border:2px solid #cc00ff}
+#lobJoin{border-color:#cc00ff;color:#cc00ff;box-shadow:0 0 10px rgba(204,0,255,.5),inset 0 0 8px rgba(204,0,255,.25)}
+#lobJoin:hover{background:rgba(204,0,255,.2);box-shadow:0 0 22px #cc00ff}
+
+/* 3. LOCALE: oro neon */
+#lobLocal{border-color:#ffd700;color:#ffd700;box-shadow:0 0 10px rgba(255,215,0,.5),inset 0 0 8px rgba(255,215,0,.25)}
+#lobLocal:hover{background:rgba(255,215,0,.2);box-shadow:0 0 22px #ffd700}
+
+/* 4. Riprendi / Esci: azzurro neon */
+#lobResume,#lobLeave{border-color:#00ffff;color:#00ffff;box-shadow:0 0 10px rgba(0,255,255,.5),inset 0 0 8px rgba(0,255,255,.25)}
+#lobResume:hover,#lobLeave:hover{background:rgba(0,255,255,.2);box-shadow:0 0 22px #00ffff}
+#sideBtn{position:absolute;left:10px;top:10px;z-index:7;margin:0;padding:6px 11px;background:rgba(17,24,39,.92);border:2px solid #475569;border-radius:8px;font-size:16px;line-height:1;cursor:pointer}
+body.side-hidden aside{display:none}
+#surrBox{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,92%);padding:18px;text-align:center;font-size:18px;background:rgba(10,12,22,.98);border:3px solid #e5e7eb;border-radius:12px;z-index:9}
+#surrBox .leg{font-size:13px;margin:10px 0 14px;color:#cbd5e1}
+#surrBox #surrYes{background:#b91c1c}
+#netmsg{display:none;position:absolute;left:56px;top:10px;z-index:9;padding:6px 12px;background:rgba(127,29,29,.95);border:1px solid #ef4444;border-radius:8px;font-size:13px}
+@media(max-width:760px){body{flex-direction:column}aside{width:100%;max-height:38vh;border-right:0}}
+
+/* Schermata nera introduttiva a dissolvenza */
+#fadeBlack{
+  position: fixed;          /* Rimane fisso su tutto lo schermo */
+  inset: 0;                 /* Copre da bordo a bordo (top, bottom, left, right a 0) */
+  background: #000;         /* Colore nero totale */
+  z-index: 999999;          /* Sta sopra a qualsiasi altro elemento del gioco */
+  pointer-events: none;     /* I tocchi passano attraverso, nessun blocco dei comandi */
+  animation: fadeBlack 3s ease-out forwards; /* Dura 3 secondi e mantiene lo stato finale */
+}
+
+@keyframes fadeBlack{
+  0%   { opacity: 1; }      /* Inizio: 100% nero opaco */
+  100% { opacity: 0; visibility: hidden; } /* Fine: invisibile e trasparente */
+}
+</style>
+</head>
+<body class="lobby-wait intro-on">
+<div id="fadeBlack"></div>
+<script>setTimeout(function(){ document.body.classList.remove('lobby-wait'); },2000);</script>
+<aside>
+  <h1><span class="d">D</span>awnlor<span class="d">D</span><span id="fpsBox"></span></h1>
+  <div id="status"></div>
+  <div id="tilebox">
+    <h2>Tessera 12x12</h2>
+    <div id="posLbl" class="leg"></div>
+    <button id="prevBtn">◀</button><button id="nextBtn">▶</button>
+    <button id="rotBtn">⟳ Ruota (R)</button>
+    <button id="placeBtn">✔ Piazza (Invio)</button>
+  </div>
+  <h2>Partita</h2>
+  <div id="roomInfo" class="leg"></div>
+  <button id="fitBtn">⌖ Adatta vista (0)</button>
+  <button id="surrBtn" style="display:none" title="Arrenditi: perdi tutte le unità e le basi">🏳️ Resa</button>
+  <button id="fsBtn" style="display:none" title="Schermo intero">⛶ Schermo intero</button>
+  <div class="leg">Rotella: zoom · trascina: sposta la mappa · due dita: zoom e spostamento</div>
+  <h2 class="lt lt1">Legenda terreni</h2>
+  <div id="legend"></div>
+  <h2 class="lt lt2">Legenda edifici</h2>
+  <div id="legendB"></div>
+  <h2 class="lt lt3">Legenda azioni speciali</h2>
+  <div id="legendS"></div>
+  <h2 class="lt lt4">Legenda regole</h2>
+  <div id="legendR"></div>
+</aside>
+<main><div id="intro"></div><canvas id="board"></canvas><button id="sideBtn" title="Nascondi il pannello a sinistra">◀</button><div id="topbar"><button id="turnBtn"></button><div id="resBox"></div></div><div id="colorpick"></div><div id="menu"></div><div id="winner"></div><div id="surrBox"></div><div id="netmsg"></div>
+<div id="lobby">
+  <div id="crawl"><div id="crawlTxt">
+  <p>IL VIAGGIO E' FINITO, LA CONQUISTA HA INIZIO. NUOVE TERRE E ABBONDANTI RISORSE TI ATTENDONO, MA ALTRE FAZIONI SONO PRONTE A TUTTO PUR DI STRAPPARTELE.</p>
+  <p>SOLO UNA FAZIONE TRIONFERA'.</p>
+  <p>SARAI TU A GUIDARE L'ALBA DI UN NUOVO IMPERO, O VEDRAI SOLO IL TRAMONTO DELLA TUA CIVILTA'?</p>
+</div></div>
+  <div id="lobMenu">
+    
+    <!-- 1. Riga HOST, CODICE, CLIENT -->
+    <div style="display: flex; gap: 8px; margin-bottom: 18px; align-items: stretch;">
+      <button id="lobCreate" style="flex: 1; margin: 0; padding: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <span style="font-size: 24px; line-height: 1; display: inline-block; transform: scale(1.5); margin-right: 6px;">🖥️</span> HOST
+      </button>
+      <input id="lobCode" maxlength="8" placeholder="CODICE" autocomplete="off" style="flex: 1; margin: 0; width: 100%; text-align: center;">
+      <button id="lobJoin" style="flex: 1; margin: 0; padding: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        JOIN <span style="font-size: 24px; line-height: 1; display: inline-block; transform: scale(1.5); margin-left: 6px;">🛰️</span>
+      </button>
+    </div>
+
+    <!-- 2. Riga Selezione Giocatori e Bot -->
+    <div style="display: flex; justify-content: center; gap: 32px; margin-bottom: 18px;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+        <label for="lobN" style="font-size: 14px; font-weight: bold; color: #e5e7eb; display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 24px; line-height: 1; display: inline-block; transform: scale(1.5); margin-right: 4px; margin-bottom: 4px;">👥</span> Giocatori
+        </label>
+        <select id="lobN" style="margin: 0; padding: 6px 16px;">
+          <option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+        </select>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+        <label for="lobBots" style="font-size: 14px; font-weight: bold; color: #e5e7eb; display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 24px; line-height: 1; display: inline-block; transform: scale(1.3); margin-right: 4px; margin-bottom: 4px;">🤖</span> Bot
+        </label>
+        <select id="lobBots" style="margin: 0; padding: 6px 16px;">
+          <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Pulsante Riprendi (invisibile di default) -->
+    <div class="lrow" style="margin: 0 0 12px 0;">
+      <button id="lobResume" style="display:none; width: 100%; margin: 0;">Riprendi la partita (host)</button>
+    </div>
+
+    <!-- 3. Riga Partita Locale -->
+    <div style="text-align: center;">
+      <button id="lobLocal" style="width: 100%; padding: 14px; font-weight: bold; margin: 0; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span style="font-size: 26px; line-height: 1; display: inline-block; transform: scale(1.5); margin-right: 8px;">📱</span> LOCALE (hotseat)
+      </button>
+    </div>
+
+  </div>
+  <div id="lobWait" style="display:none">
+    <div class="leg">Codice stanza</div><div class="code" id="lobRoom"></div>
+    <div class="leg" id="lobSeats"></div>
+    <div class="leg" id="lobHostNote" style="display:none">Sei l'<b>host</b>: tieni aperta questa pagina per tutta la partita.</div>
+    <div class="leg">Gli altri giocatori entrano con questo codice o da questo indirizzo:<br><span id="lobLink"></span></div>
+    <button id="lobLeave">Esci</button>
+  </div>
+  <div class="leg" id="lobMsg"></div>
+</div>
+</main>
+
+<script>
+// Carica i file .js del gioco con un parametro sempre diverso: il browser non usa mai la copia in cache (anche su tablet).
+// Stesso ordine di prima, caricamento sincrono. Suoni e immagini restano fuori; peerjs.min.js è una libreria e resta in cache.
+(function(){
+  var v = Date.now();
+  ['drules.js','dcoop.js','dquests.js','dai.js','dcardsui2.js','dfx.js','dassets.js','peerjs.min.js','dnet.js'].forEach(function(f){
+    document.write('<scr'+'ipt src="'+f+(f==='peerjs.min.js' ? '' : '?v='+v)+'"></scr'+'ipt>');
+  });
+})();
+</script>
+<script>
+// ================== INTERFACCIA (grafica, menu, input) ==================
+// Le regole e lo stato di gioco stanno in drules.js. Qui si legge lo stato per disegnarlo e ogni
+// mossa del giocatore diventa UNA azione che passa da send() (vedi "CANALE VERSO IL NUCLEO").
+
+const MENU_SHADE = 0.03;     // luminosità dello sfondo del menu rispetto al colore di fazione (1 = colore pieno, 0 = nero)
+const shade = (hex,f) => '#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*f).toString(16).padStart(2,'0')).join('');   // scurisce un colore #rrggbb
+const STAT_COLOR = Object.fromEntries(STATS.map(s=>[s.id,s.color]));
+const statNum = (id,v) => `<b style="color:${STAT_COLOR[id]}">${v}</b>`;   // numero colorato per i menu
+const UNIT_EMOJI = '🗡️';
+// Azioni speciali per tipo di entità (menu "Azioni speciali"): con mode = azione immediata scegliendo l'esagono, senza mode = sottomenu
+const COMMON_SPECIALS = [   // identiche per basi e unità
+  {id:'costruisci', e:'🛠', label:'Costruisci', rule:`Costruisce su una casella vuota adiacente un terreno (${BUILD_TERRAIN_COST} azioni, la nebbia ${BUILD_FOG_COST}; niente rocce) o un edificio (costi e requisiti nella legenda edifici). La miniera si costruisce invece sopra una risorsa adiacente.`},
+  {id:'demolisci',  e:'💥', label:'Demolisci', mode:'demolish', rule:`Costo ${DEMOLISH_COST} azioni. Fa sempre ${DEMOLISH_DAMAGE} danni a ciò che sta in una casella adiacente: terreni, edifici, basi e unità (anche alleate). A 0 vita sparisce (una miniera lascia la risorsa).`},
+  {id:'raccogli',   e:'💎', label:'Raccogli risorse', mode:'collect', rule:`Costo ${COLLECT_COST} azioni. Prende 1 risorsa adiacente: +${RESOURCE_VALUE} credito (la risorsa resta sempre disponibile).`},
+  {id:'cura',       e:'💚', label:'Cura', mode:'heal', rule:`Costo ${HEAL_COST} azione. Restituisce ${HEAL_AMOUNT} vita a un'unità, base, edificio o muro adiacente (anche te stesso o un nemico), fino al massimo.`},
+  {id:'difesa',     e:DEFENSE_EMOJI, label:'Difesa', instant:true,   // instant = azione immediata, senza scelta dell'esagono (logica in dcards.js)
+   rule:`Costo ${DEFENSE_COST} azioni. Resti in allerta (${DEFENSE_EMOJI} sulla mappa) fino all'inizio del tuo prossimo turno. Nei turni degli altri: se un nemico si ferma a tiro (dopo uno spostamento o un lancio) gli spari per primo, gratis e ogni volta che succede; se ti attacca rispondi per primo e, se l'aggressore muore, il suo colpo non arriva. Il danno è il tuo attacco, con le normali regole di tiro (linea retta, gittata, ostacoli, nebbia). Se il bersaglio muore, il suo movimento si interrompe. Non si può rifare se già attiva.`},
+  {id:'nuovacarta', e:'🛒🃏', label:'Compra Tattica', rule:`Sostituisce una carta già usata con una nuova scelta ora (sempre max 3 carte). Costo ${NEW_CARD_COST} risorse.`}   // sottomenu (cards.js): sostituisce una carta già usata, costa NEW_CARD_COST risorse
+];
+const SPECIALS = {
+  base: [{id:'crea', e:'🧬', label:'Crea unità', rule:`Solo la base. Crea un'unità su una casella adiacente libera: scegli vita, passi, gittata e attacco (ogni punto oltre il minimo costa crediti: ${STATS.map(s=>s.e+s.cost).join(' · ')}). Costo 1 azione. Massimo ${MAX_UNITS} unità per fazione.`}, ...COMMON_SPECIALS],   // la base in più crea unità
+  unit: [...COMMON_SPECIALS],
+  struct: []                                                           // gli edifici hanno un menu proprio
+};
+const FX_MS = 1200;                 // durata (ms) del lampo sulle caselle colpite da artiglieria, silo e nucleare
+const HL_RGB = {attack:'239,68,68', demolish:'249,115,22', collect:'34,197,94', construct:'59,130,246', airdrop:'160,255,0', fortino:'0,170,255', heal:'52,211,153', shell:'239,68,68', nuke:'217,70,239', smoke:'148,163,184'};   // colori evidenziazioni (default giallo)
+
+const SQ3 = Math.sqrt(3);
+const FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const MAP_DPR_MAX = 1;   // risoluzione massima del canvas della mappa (1 = più leggero ma più sfocato; 2 o più = nitido ma pesante)
+const cv = document.getElementById('board'), g = cv.getContext('2d');
+let S = 30, V = {minC:0,minR:0,cols:TILE,rows:TILE};
+let fitS = 30, Z = 1, PX = 0, PY = 0, CW = 0, CH = 0; // vista: zoom (1 = adatta alla finestra) e spostamento in pixel
+const newDraft = () => Object.fromEntries(STATS.map(s=>[s.id,STAT_MIN]));
+// Stato SOLO locale (non fa parte della partita): sel = id dell'entità selezionata, candIdx/rotN = anteprima della tessera
+let hover = null, sel = null, menuPath = [], mode = null, draft = newDraft(), logMsg = '', pending = null, fx = null, candIdx = 0, rotN = 0;
+
+// ---------- tessere: anteprima locale (posizione e rotazione si decidono qui, al piazzamento parte un'azione) ----------
+const ghost = () => ({tx:cands[candIdx][0], ty:cands[candIdx][1], data:rotateTile(curTile,rotN), owner:step%NUM_PLAYERS});
+function rotTile(){
+  if(phase!=='tiles' || !isMine()) return;
+  rotN = (rotN+1)%4;                                 // 90° in senso orario
+  redraw();
+}
+function cycle(d){
+  if(phase!=='tiles' || !isMine()) return;
+  candIdx = (candIdx+d+cands.length)%cands.length;
+  updateUI(); layout();
+}
+function placeTileUI(){ if(phase==='tiles' && isMine()) send({t:'placeTile', cand:candIdx, rot:rotN}); }
+
+// ---------- scelta della fazione (all'inizio, prima della mappa) ----------
+// 8 ottagoni in cerchio con le immagini img/faction1.png ... faction8.png: quello in alto, un po' più grande, è la fazione selezionata.
+// Toccando un altro ottagono il cerchio ruota e quello toccato sale in alto; si conferma con il pulsante (o toccando di nuovo quello in alto).
+let facSel = 0, facRandStep = -1;   // facRandStep: turno di scelta per cui la fazione casuale è già stata estratta
+const facTaken = i => (players||[]).some(p=>p.color===PALETTE[i].color);      // (players non esiste ancora quando si costruisce la schermata)
+const facFirstFree = () => { const i = PALETTE.findIndex((c,k)=>!facTaken(k)); return i<0 ? 0 : i; };
+const facImg = i => IMG_DIR + 'faction' + ((FACTION_IMG[PALETTE[i].color]||{}).slot || i+1) + '.png';
+function facPlace(){                                  // dispone gli ottagoni in cerchio con quello selezionato in alto
+  const n = PALETTE.length;
+  
+  // ---- AGGIUNTA: Aggiorna lo sfondo a pieno schermo con l'immagine della fazione selezionata ----
+  const bgEl = document.getElementById('facBg');
+  if(bgEl) {
+    bgEl.style.backgroundImage = `url(${facImg(facSel)})`;
+  }
+  // ------------------------------------------------------------------------------------------
+
+  document.querySelectorAll('#colorpick .fac').forEach(f=>{
+    const i = +f.dataset.i, k = (i-facSel+n)%n, a = (-90 + k*360/n)*Math.PI/180, top = k===0;
+    f.style.left = (50 + 36*Math.cos(a)) + '%'; f.style.top = (50 + 36*Math.sin(a)) + '%';
+    f.style.width = f.style.height = (top ? 32 : 20) + '%';
+    f.classList.toggle('sel',top); f.classList.toggle('taken',facTaken(i));
+  });
+}
+(function buildFactionScreen(){
+  const el = document.getElementById('colorpick');
+  // AGGIUNTO '<div id="facBg"></div>' all'inizio dell'HTML:
+  el.innerHTML = '<div id="facBg"></div><div class="facwrap">' + PALETTE.map((c,i)=>`<div class="fac" data-i="${i}" style="--fc:${c.color}"><div class="facbd"></div><div class="facin"><img src="${facImg(i)}" alt="${c.name}" draggable="false"></div></div>`).join('')
+    + '<div id="facmid"><div id="facTitle"></div><div id="facName"></div><button id="facOk">✔ Conferma</button></div></div>';
+  el.querySelectorAll('img').forEach(im=>{ im.onerror = ()=>{ const t = document.createElement('span'); t.textContent = im.alt; im.replaceWith(t); }; });   // immagine mancante: resta il nome
+  facPlace();
+})();
+function renderColorPicker(){
+  const el = document.getElementById('colorpick'), show = phase==='colors' && !lobbyOpen();
+  if(document.body.classList.contains('pick-on')!==show){ document.body.classList.toggle('pick-on',show); layout(); }   // a schermo intero: niente pannello a sinistra
+  if(!show){ el.style.display = 'none'; facRandStep = -1; return; }
+  if(facRandStep !== step){                                  // nuovo turno di scelta: fazione di partenza casuale tra quelle libere
+    facRandStep = step;
+    const free = PALETTE.map((c,k)=>k).filter(k=>!facTaken(k));
+    if(free.length) facSel = free[Math.floor(Math.random()*free.length)];
+  }
+  if(facTaken(facSel)) facSel = facFirstFree();
+  const p = curPlayer(), mine = isMine(), c = PALETTE[facSel];
+  facPlace();
+  document.getElementById('facTitle').textContent = mine ? `🎨 ${p.name}: scegli la tua fazione` : `⏳ ${p.name} sta scegliendo la fazione…`;
+  const nm = document.getElementById('facName'); nm.textContent = c.name; nm.style.color = c.color;
+  const ok = document.getElementById('facOk'); ok.style.display = mine ? '' : 'none'; ok.disabled = facTaken(facSel);
+  const rgb = [1,3,5].map(i=>parseInt(c.color.slice(i,i+2),16)).join(',');   // "#rrggbb" → "r,g,b"
+  ok.style.setProperty('--fc',   c.color);                // bordo, testo, bagliore pieno
+  ok.style.setProperty('--fc50', `rgba(${rgb},.5)`);      // alone esterno
+  ok.style.setProperty('--fc25', `rgba(${rgb},.25)`);     // bagliore interno
+  ok.style.setProperty('--fc20', `rgba(${rgb},.2)`);      // sfondo in hover
+  el.style.display = 'block';
+}
+function confirmFaction(){ if(phase==='colors' && isMine() && !facTaken(facSel)) send({t:'chooseColor', color:PALETTE[facSel].color}); }
+document.getElementById('colorpick').addEventListener('click',e=>{
+  if(phase!=='colors' || !isMine()) return;
+  const f = e.target.closest('.fac');
+  if(f){ 
+    const i = +f.dataset.i; 
+    if(facTaken(i)) return; 
+    
+    // RIMOSSO IL CONTROLLO: if(i===facSel) confirmFaction();
+    // Adesso cliccare su qualsiasi fazione (compresa quella già selezionata) aggiorna solo la selezione e fa ruotare il cerchio, senza confermare.
+    facSel = i; 
+    playFactionMusic(PALETTE[i].color);      // la traccia della fazione parte subito, ancora prima della conferma
+    renderColorPicker(); 
+    return; 
+  }
+  // La conferma rimane legata ESCLUSIVAMENTE al pulsante #facOk
+  if(e.target.closest('#facOk')) confirmFaction();
+});
+
+// ---------- geometria esagonale (punta in alto, righe dispari spostate) ----------
+function ctr(c,r){ return [S*SQ3*((c-V.minC)+0.5*(r&1))+S*SQ3/2+PX, S*1.5*(r-V.minR)+S+PY]; }
+function hexPath(ctx,x,y,s){
+  ctx.beginPath();
+  for(let k=0;k<6;k++){
+    const a = Math.PI/180*(60*k-30), px = x+s*Math.cos(a), py = y+s*Math.sin(a);
+    k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+  }
+  ctx.closePath();
+}
+function highlights(){
+  const h = new Set();
+  if(!isMine()) return h;
+  if(phase==='base'){
+    baseHexes().forEach(k=>h.add(k));
+  } else if(phase==='play' && mode){
+    const e = selEntity();
+    if(mode==='build' && e) freeNeighbors(e.c,e.r).forEach(([c,r])=>h.add(key(c,r)));        // accanto alla base scelta
+    else if(mode==='move' && e) reachable(e).forEach((_,k)=>h.add(k));                     // fino a "passi"
+    else if(mode==='attack' && e) targets(e).forEach(v=>h.add(key(v.c,v.r)));               // caselle attaccabili a tiro
+    else if(mode==='demolish' && e) demolishTargets(e).forEach(([c,r])=>h.add(key(c,r)));    // oggetti e basi nemiche adiacenti
+    else if(mode==='collect' && e) collectTargets(e).forEach(([c,r])=>h.add(key(c,r)));       // risorse adiacenti
+    else if(mode==='construct' && e) constructTargets(e,pending).forEach(([c,r])=>h.add(key(c,r)));   // caselle adiacenti valide per ciò che si costruisce (la miniera: sopra una risorsa)
+    else if(mode==='airdrop') airdropTargets().forEach(([c,r])=>h.add(key(c,r)));              // carta Airdrop: qualsiasi esagono libero
+    else if(mode==='fortino') fortinoTargets().forEach(([c,r])=>h.add(key(c,r)));              // carta Fortino: vuoto o roccia da rinforzare
+    else if(mode==='heal' && e) healTargets(e).forEach(([c,r])=>h.add(key(c,r)));              // alleati o muri feriti adiacenti
+    else if(mode==='infect' && e) coopInfectTargets(e).forEach(([c,r])=>h.add(key(c,r)));            // coop: basi di mostri adiacenti
+    else if(mode==='techArmor' && e) techArmorTargets(e).forEach(([c,r])=>h.add(key(c,r)));    // top-tech: unità o basi adiacenti non ancora al massimo
+    else if((mode==='shell' || mode==='nuke' || mode==='smoke') && e) shellTargets(e,mode==='nuke',mode==='smoke').forEach(([c,r])=>h.add(key(c,r)));   // artiglieria / silo: fascia di gittata
+  }
+  return h;
+}
+
+// ---------- disegno ----------
+function emoji(e,x,y,size){
+  g.font = size+'px '+FONT; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle = '#fff';   // sempre opaco: senza questa riga l'emoji eredita l'ultimo colore usato
+  g.fillText(e,x,y+size*0.05);
+}
+const SEL_RING_R = 1.0;      // cerchio di selezione: raggio INTERNO in multipli di S (1 = tocca i vertici dell'esagono, cioè lo circoscrive)
+const SEL_RING_W = 0.14;     // spessore dell'anello nel colore di fazione (multipli di S)
+const SEL_WHITE_W = 0.09;    // spessore del bordo bianco, solo verso l'esterno (multipli di S)
+const TERRAIN_OVER_SIZE = 0.75;   // dimensione dell'emoji del terreno disegnata sopra unità e basi (1 = come sulla mappa)
+function cornerEmoji(e,x,y,side){
+  g.save(); g.globalAlpha = 1;
+  emoji(e,x+S*0.45*side,side ? y-S*0.45 : y,S*TERRAIN_OVER_SIZE);
+  g.restore();
+}
+function terrainOver(c,r,x,y){                         // ridisegna l'emoji del terreno sopra l'unità o la base che ci sta sopra
+  if(treasures.has(key(c,r))) cornerEmoji('💰',x,y,-1);   // tesoro sotto un'unità
+  const k = terr(c,r); if(!k || !TERRAINS[k].e) return;
+  cornerEmoji(TERRAINS[k].e,x,y,-1);
+}
+function statBadge(x,y,u){                             // sotto l'unità: vita, passi, gittata, attacco (solo numeri colorati)
+  const val = {vita:u.hp, passi:moveOf(u), gittata:rangeOf(u), attacco:attackOf(u)};
+  g.font = `bold ${S*0.42}px sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle';
+  const gap = S*0.12, w = STATS.map(s=>g.measureText(val[s.id]).width);
+  let px = x - (w.reduce((a,b)=>a+b,0) + gap*(STATS.length-1))/2;
+  const py = y + S*0.8;
+  g.lineWidth = 3; g.strokeStyle = '#000';
+  STATS.forEach((s,i)=>{ g.fillStyle = s.color; g.strokeText(val[s.id],px,py); g.fillText(val[s.id],px,py); px += w[i]+gap; });
+}
+function dmgBadge(x,y,hp){                             // vita rimasta di un oggetto danneggiato
+  g.font = `bold ${S*0.55}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 3; g.strokeStyle = '#000'; g.fillStyle = '#fdba74';
+  g.strokeText(hp,x,y-S*0.5); g.fillText(hp,x,y-S*0.5);
+}
+function terrBadge(x,y,hp){                            // vita rimasta di un terreno (rocce, nebbia, coperture...): bianca con bordo nero, al centro della casella
+  g.save();
+  g.font = `bold ${S*0.55}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineJoin = 'round'; g.lineWidth = 4; g.strokeStyle = '#000'; g.fillStyle = '#fff';
+  g.strokeText(hp,x,y); g.fillText(hp,x,y);
+  g.restore();
+}
+let bgOn = false;                                      // true se l'immagine di sfondo è stata disegnata in questo ciclo (dassets.js: drawMapBg)
+let occ = new Set();                                    // caselle occupate da basi, edifici o unità (ricalcolato a ogni disegno)
+function cell(c,r,t,owner,alpha,gh,pass){              // pass 0 = sfondo dell'esagono, pass 1 = immagine/emoji e numeri (le immagini possono sbordare)
+  const [x,y] = ctr(c,r);
+  if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return; // fuori dalla vista (margine largo: le immagini sbordano)
+  g.globalAlpha = alpha;
+  if(pass===0){
+    const neutral = !t || TERRAINS[t].tint===EMPTY_BG;
+    hexPath(g,x,y,S);
+    if(!neutral){ g.fillStyle = TERRAINS[t].tint; g.fill(); }
+    else if(!bgOn){ g.fillStyle = EMPTY_BG_NOIMG; g.fill(); }   // con l'immagine c'è già il velo generale; il fondo serve solo se l'immagine manca
+    g.lineWidth = 0.3; g.strokeStyle = gh?'#94a3b8':'#777'; g.stroke();
+    g.globalAlpha = 1; return;
+  }
+  const occupied = occ.has(key(c,r));                    // con un'unità o una base sopra, l'emoji grande non si disegna: c'è quella piccola e opaca (terrainOver)
+  if(t==='miniera' && !occupied) emoji('💎',x,y,S);       // la miniera sta sopra una risorsa: il cristallo resta sotto il piccone
+  if(t && !terrainSprite(t,c,r,x,y) && !occupied) emoji(TERRAINS[t].e,x,y,t==='miniera' ? S*0.99 : S);
+  if(treasures.has(key(c,r)) && !occupied) emoji('💰',x,y,S*0.8);   // tesoro apparso dopo il crollo della roccia
+  if(!gh && nukeMarks.has(key(c,r))) {
+    const nx = t ? x+S*0.42 : x, ny = t ? y+S*0.42 : y;
+    // Immagine ingrandita del 200% (S*1.6 e S*3.0 anziché 0.8 e 1.5)
+    const imgSize = t ? S*1.6 : S*3.0; 
+    
+    // Cerca di disegnare GU12.png. Se non lo trova, usa l'emoji con le sue grandezze originali
+    if(!drawSprite('GU12.png', nx, ny, imgSize, true)) {
+      emoji('🌋', nx, ny, t ? S*0.5 : S*0.85);
+    }
+  }
+  g.globalAlpha = 1;
+  // il numero di vita degli oggetti danneggiati non si disegna qui: lo fa draw() alla fine, sopra unità, basi ed edifici
+  if(t==='miniera'){                                    // anello nel colore del proprietario
+    const o = mineOwner.get(key(c,r));
+    if(o!==undefined){ const lw = 6; hexPath(g,x,y,S-lw/2); g.lineWidth = lw; g.strokeStyle = players[o].color; g.stroke(); }
+  }
+}
+// Tessera in anteprima (fase mappa): evidenziata nel colore della fazione, accesa e pulsante (fill + bordo esterno)
+const GLOW_PERIOD = 260;       // più basso = lampeggia più veloce (un ciclo completo ogni ~6,3 x questo valore, in ms)
+const GLOW_FILL = [0.25,0.40]; // trasparenza del riempimento: minimo e variazione (0.25 → 0.65)
+const GLOW_FRAME_W = 3;        // spessore base del bordo esterno (in pixel, cresce col lampeggio)
+const GLOW_EDGES = [           // lato k dell'esagono -> [vicino riga pari, vicino riga dispari] come (dc,dr)
+  [[1,0],[1,0]], [[0,1],[1,1]], [[-1,1],[0,1]], [[-1,0],[-1,0]], [[-1,-1],[0,-1]], [[0,-1],[1,-1]]
+];
+let glowT = 0;
+function ghostGlow(t,color){
+  const k = 0.5+0.5*Math.sin(Date.now()/GLOW_PERIOD), inTile = (c,r) => Math.floor(c/TILE)===t.tx && Math.floor(r/TILE)===t.ty;
+  g.save(); g.lineJoin = 'round'; g.lineCap = 'round';
+  for(let i=0;i<TILE;i++) for(let j=0;j<TILE;j++){      // riempimento + bordo di ogni esagono
+    const [x,y] = ctr(t.tx*TILE+j,t.ty*TILE+i);
+    if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) continue;
+    hexPath(g,x,y,S);
+    g.globalAlpha = GLOW_FILL[0]+GLOW_FILL[1]*k; g.fillStyle = color; g.fill();
+    g.globalAlpha = 0.5+0.5*k; g.lineWidth = 1+k; g.strokeStyle = color; g.stroke();
+  }
+  g.beginPath();                                          // cornice esterna della tessera: solo i lati senza vicino nella tessera
+  for(let i=0;i<TILE;i++) for(let j=0;j<TILE;j++){
+    const c = t.tx*TILE+j, r = t.ty*TILE+i, [x,y] = ctr(c,r);
+    for(let e=0;e<6;e++){
+      const d = GLOW_EDGES[e][r&1];
+      if(inTile(c+d[0],r+d[1])) continue;
+      const a0 = Math.PI/180*(60*e-30), a1 = Math.PI/180*(60*(e+1)-30);
+      g.moveTo(x+S*Math.cos(a0),y+S*Math.sin(a0)); g.lineTo(x+S*Math.cos(a1),y+S*Math.sin(a1));
+    }
+  }
+  g.globalAlpha = 0.65+0.35*k; g.lineWidth = GLOW_FRAME_W+3*k; g.strokeStyle = color; g.stroke();
+  g.restore();
+}
+function drawTile(t,alpha,gh,pass){
+  for(let i=0;i<TILE;i++) for(let j=0;j<TILE;j++) cell(t.tx*TILE+j,t.ty*TILE+i,t.data[i][j],t.owner,alpha,gh,pass);
+}
+
+// ================= EVENTI GRAFICI AMBIENTALI =================
+const AMBIENT_TYPES = [
+  { id: 'GUA16', dir: -1 }, // da destra a sinistra
+  { id: 'ALI7',  dir:  1 }, // da sinistra a destra
+  { id: 'EUR16', dir:  1 }, // da sinistra a destra
+  { id: 'DEM13', dir: -1 }, // da destra a sinistra
+  { id: 'MED14', dir:  1 }, // da sinistra a destra
+  { id: 'ROB15', dir: -1 }, // da destra a sinistra
+  { id: 'ZER8',  dir:  1 }  // da sinistra a destra
+];
+
+let nextAmbientSpawnTime = 0;
+
+// Timer indipendente: controlla ogni secondo se è ora di far apparire un'immagine
+setInterval(() => {
+  if (phase !== 'play') {
+    nextAmbientSpawnTime = 0; // Azzera se non siamo in partita
+    fxAmbient.length = 0;
+    return;
+  }
+  
+  const now = Date.now();
+  
+  // Inizializza il timer al primo avvio (tra 1 e 3 minuti)
+  if (nextAmbientSpawnTime === 0) {
+    nextAmbientSpawnTime = now + Math.floor(Math.random() * 120000) + 60000; 
+  }
+  
+  // Quando scade il timer, crea l'entità
+  if (now > nextAmbientSpawnTime) {
+    const config = AMBIENT_TYPES[Math.floor(Math.random() * AMBIENT_TYPES.length)];
+    fxAmbientAdd(config.id + '.png', config.dir);   // movimento e disegno: dfx.js (canvas degli effetti)
+    
+    // Imposta il prossimo timer (tra 1 e 3 minuti -> da 60.000 a 180.000 ms)
+    nextAmbientSpawnTime = now + Math.floor(Math.random() * 120000) + 60000;
+  }
+}, 1000);
+
+function draw(){
+  g.clearRect(0,0,cv.width,cv.height);
+  occ = new Set(); players.forEach(p=>[...p.bases,...p.units,...p.structs].forEach(e=>{ if(!(COOP && coopHide(p,e,e.isBase))) occ.add(key(e.c,e.r)); }));
+  const gt = phase==='tiles' && isMine() ? ghost() : null;
+  bgOn = drawMapBg(gt ? [...tiles.values(),gt] : [...tiles.values()]);   // immagine di sfondo sotto tutte le caselle
+  [0,1].forEach(pass=>{                               // prima gli sfondi di tutte le caselle, poi le immagini: così non vengono coperte dalle caselle vicine
+    tiles.forEach(t=>drawTile(t,1,false,pass));
+    if(gt){ drawTile(gt,0.75,true,pass); if(pass===0) ghostGlow(gt,players[gt.owner].color); }
+  });
+  if(COOP) coopDrawFog();                             // coop: nebbia di guerra (nero = mai vista, velo = già vista)
+  if(phase==='play' && mode==='attack'){              // linee di tiro disponibili (rosso tenue)
+    const e = selEntity();
+    if(e) (e.sniperBuff ? sniperLines(e) : firingLines(e)).cells.forEach(([c,r])=>{
+      const [x,y] = ctr(c,r); hexPath(g,x,y,S*0.92); g.fillStyle = 'rgba(239,68,68,.12)'; g.fill();
+    });
+  }
+  const hl = highlights();
+  hl.forEach(k=>{
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    const on = hover && hover.c===c && hover.r===r;
+    hexPath(g,x,y,S*0.92);
+    const rgb = HL_RGB[mode] || '250,204,21';
+    g.fillStyle = `rgba(${rgb},${on?.55:.28})`; g.fill();
+    g.lineWidth = on?3:2; g.strokeStyle = `rgb(${rgb})`; g.stroke();
+  });
+  if(phase==='play' && mode==='nuke' && hover && hl.has(key(hover.c,hover.r)))   // anteprima dell'area d'esplosione
+    blastCells(hover.c,hover.r).forEach(([c,r])=>{ const [x,y] = ctr(c,r); hexPath(g,x,y,S*0.92); g.fillStyle = `rgba(${HL_RGB.attack},.5)`; g.fill(); g.lineWidth = 2; g.strokeStyle = `rgb(${HL_RGB.attack})`; g.stroke(); });
+  if(fx && Date.now()>=fx.from && Date.now()<fx.until)                // lampo sulle caselle appena colpite (dopo il volo, se c'è)
+    fx.cells.forEach(([c,r])=>{ const [x,y] = ctr(c,r); hexPath(g,x,y,S*0.95); g.fillStyle = `rgba(${fx.rgb},.6)`; g.fill(); });
+  empCells.forEach((o,k)=>{                                 // zona EMP: qui la nebbia non ha effetto (fino alla fine del turno di chi l'ha lanciata)
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return;
+    hexPath(g,x,y,S*0.95); g.fillStyle = 'rgba(255,0,204,.14)'; g.fill();
+  });
+  smokeCells.forEach((o,k)=>{                               // fumogeno: nebbia temporanea
+    if(empCells.has(k)) return;                             // annullato dall'EMP: non si disegna
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    hexPath(g,x,y,S*0.95); g.fillStyle = 'rgba(203,213,225,.38)'; g.fill(); g.globalAlpha = 0.75; emoji('☁️',x,y,S*0.9); g.globalAlpha = 1;
+  });
+  const se = phase==='play' ? selEntity() : null;   // cerchio di selezione nel colore di fazione (sotto unità, basi e numeri)
+  if(se){                                           
+    const [x,y] = fxUnitPos(se);
+    const sizeMult = se.finalBase ? 1.5 : 1;        // Allarga l'anello di selezione per la base finale
+    const r0 = S*SEL_RING_R * sizeMult, w = S*SEL_RING_W, ow = Math.max(2.5,S*SEL_WHITE_W);
+    g.beginPath(); g.arc(x,y,r0+w/2,0,Math.PI*2); g.lineWidth = w; g.strokeStyle = curPlayer().color; g.stroke();        
+    g.beginPath(); g.arc(x,y,r0+w+ow/2,0,Math.PI*2); g.lineWidth = ow; g.strokeStyle = '#fff'; g.stroke();              
+  }
+  [0,1].forEach(pass=>players.forEach(p=>{              // 2 passate: prima gli sfondi di tutti, poi immagini e numeri (le immagini possono sbordare senza essere coperte)
+    p.bases.forEach(b=>{
+      if(COOP && coopHide(p,b,true)) return;              // coop: base nemica mai scoperta
+      const [x,y] = ctr(b.c,b.r);
+      if(pass===0){ baseBack(p.color,x,y,b); return; }        // sfondo semi-trasparente + bordo tondo spesso (dassets.js)
+      if(!baseSprite(p,b,x,y)) emoji('🏰',x,y,S*0.85);
+      terrainOver(b.c,b.r,x,y);
+      if(b.hp<b.st.vita) dmgBadge(x,y,b.hp);              // numerino solo se la base è danneggiata
+      cardMarks(b,x,y);
+    });
+    p.structs.forEach(s=>{                                   // edifici: esagono nel colore della fazione con l'emoji dell'edificio
+      if(COOP && coopHide(p,s,false)) return;                // coop: gli edifici dei mostri fuori visuale non si vedono (quest di fazione)
+      const [x,y] = ctr(s.c,s.r);
+      if(pass===0){ hexPath(g,x,y,S); g.fillStyle = p.color; g.fill(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); return; }
+      if(structSprite(p,s,x,y)) cornerEmoji(BUILDINGS[s.type].e,x,y,0);   // c'è l'immagine: l'emoji resta piccola, esattamente al centro della casella
+      else emoji(BUILDINGS[s.type].e,x,y,S*0.8);                          // niente immagine: emoji grande come prima
+      terrainOver(s.c,s.r,x,y);                              // il bunker può stare su qualunque terreno: l'emoji del terreno resta visibile in piccolo
+      if(s.hp<s.st.vita) dmgBadge(x,y,s.hp);                 // numerino solo se danneggiato
+      cardMarks(s,x,y);
+    });
+    p.units.forEach(u=>{
+      if(COOP && coopHide(p,u,false)) return;             // coop: i nemici fuori visuale non si vedono mai
+      const [x,y] = fxUnitPos(u);                         // durante lo spostamento: posizione interpolata (dfx.js)
+      if(pass===0){ unitBack(p.color,x,y); return; }      // sfondo semi-trasparente + bordo esagonale spesso (dassets.js)
+      fxTrail(p,u,x,y);                                   // scia dello spostamento (dfx.js)
+      if(!unitSprite(p,u,x,y)) emoji(UNIT_EMOJI,x,y,S*0.8);
+      terrainOver(u.c,u.r,x,y); statBadge(x,y,u); cardMarks(u,x,y);
+    });
+  }));
+  g.globalAlpha = 1;
+  if(phase==='play' && mode){                         // caselle evidenziate occupate (unità, basi, edifici): il colore si ridisegna SOPRA, altrimenti lo coprono
+    const rgb = HL_RGB[mode] || '250,204,21';
+    hl.forEach(k=>{
+      if(!occ.has(k)) return;
+      const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+      const on = hover && hover.c===c && hover.r===r;
+      hexPath(g,x,y,S*0.95);
+      g.fillStyle = `rgba(${rgb},${on?.5:.25})`; g.fill();
+      g.lineWidth = on?4:3; g.strokeStyle = `rgb(${rgb})`; g.stroke();
+    });
+    if(mode==='nuke' && hover && hl.has(key(hover.c,hover.r)))   // anteprima dell'area d'esplosione: anche sopra le entità
+      blastCells(hover.c,hover.r).forEach(([c,r])=>{
+        if(!occ.has(key(c,r))) return;
+        const [x,y] = ctr(c,r);
+        hexPath(g,x,y,S*0.95); g.fillStyle = `rgba(${HL_RGB.attack},.4)`; g.fill(); g.lineWidth = 3; g.strokeStyle = `rgb(${HL_RGB.attack})`; g.stroke();
+      });
+  }
+  if(COOP) coopDrawObjects();                         // coop: sopravvissuto e drone abbattuto
+  objHp.forEach((hp,k)=>{                             // vita rimasta di rocce e altri oggetti danneggiati: sopra a unità (Spettro incluso), basi ed edifici
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return;   // fuori dalla vista
+    if(terr(c,r)) terrBadge(x,y,hp);                   // solo se l'oggetto esiste ancora
+  });
+  const rockUnits = new Set();                        // rocce con sopra un'unità (Spettro): il numero della vita si vede sempre, anche a vita piena
+  players.forEach(p=>p.units.forEach(u=>{ if(terr(u.c,u.r)==='rocce' && !(COOP && coopHide(p,u,false))) rockUnits.add(key(u.c,u.r)); }));
+  rockUnits.forEach(k=>{
+    if(objHp.has(k)) return;                          // già disegnato sopra (roccia danneggiata)
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return;
+    terrBadge(x,y,objMaxHp('rocce'));
+  });
+  players.forEach(p=>p.units.forEach(u=>{             // edificio con sopra uno Spettro: la sua vita si vede sempre, sopra all'unità
+    const s = structCover(u); if(!s || (COOP && coopHide(p,u,false))) return;
+    const [x,y] = ctr(s.c,s.r); if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return;
+    dmgBadge(x,y,s.hp);
+  }));
+  drawShieldCounts();                                 // numero di scudi della carta (dcardsui2.js)
+  drawDomeShields();                                  // scudi dei dome: per ultimi, sopra a basi, edifici e unità
+  if(gt && !glowT) glowT = setTimeout(()=>{ glowT = 0; redraw(); },40);   // tessera in anteprima: continua a lampeggiare (~25 fotogrammi/s, si ferma da sola finita la fase)
+}
+// Shield dome: ogni casella con scudi ha un cerchio tratteggiato (stessa grafica dello scudo della carta) e il numero di scudi rimasti.
+// Se più dome coprono la stessa casella gli scudi si sommano (domeHit li scarica uno alla volta, nell'ordine): un solo cerchio e un solo numero, quello totale.
+function drawDomeShields(){
+  const tot = new Map();
+  players.forEach(p=>p.structs.forEach(s=>{
+    if(s.type!=='domo' || !s.cs) return;
+    Object.entries(s.cs).forEach(([k,n])=>{ if(n>0) tot.set(k,(tot.get(k)||0)+n); });
+  }));
+  tot.forEach((n,k)=>{
+    const [c,r] = k.split(',').map(Number), [x,y] = ctr(c,r);
+    if(x<-S*2||y<-S*2||x>CW+S*2||y>CH+S*2) return;
+    const rad = S*(entitiesHere(c,r).some(e=>e.shielded>0) ? 1.1 : 0.95);   // se sulla casella c'è anche lo scudo della carta, il cerchio del dome è un po' più grande: restano distinguibili
+    g.save();
+    g.beginPath(); g.arc(x,y,rad,0,Math.PI*2); g.fillStyle = `rgba(0,255,255,${Math.min(0.2,0.04+0.03*n)})`; g.fill();
+    g.strokeStyle = '#00ffff'; g.lineWidth = 3; g.setLineDash([8,6]); g.stroke(); g.setLineDash([]);
+    g.font = `bold ${Math.round(S*0.42)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';   // numero sul bordo in alto del cerchio
+    g.lineWidth = 3.5; g.strokeStyle = '#000'; g.fillStyle = '#67e8f9';
+    g.strokeText(n,x,y-rad); g.fillText(n,x,y-rad);
+    g.restore();
+  });
+}
+// dimensiona la vista sulle tessere piazzate (+ quella in anteprima) e ridisegna
+function layout(){
+  const list = [...tiles.values()];
+  if(phase==='tiles' && (isMine() || !list.length)) list.push(ghost());
+  else if(!list.length) list.push({tx:0,ty:0});     // fase fazioni: mappa ancora vuota
+  const xs = list.map(t=>t.tx), ys = list.map(t=>t.ty), mx = Math.min(...xs), my = Math.min(...ys);
+  V = {minC:mx*TILE, minR:my*TILE, cols:(Math.max(...xs)-mx+1)*TILE, rows:(Math.max(...ys)-my+1)*TILE};
+  const m = document.querySelector('main');
+  CW = m.clientWidth; CH = m.clientHeight;
+  fitS = Math.max(6, Math.min((CW-24)/(SQ3*(V.cols+0.5)), (CH-24)/(1.5*V.rows+0.5)));
+  const dpr = Math.min(window.devicePixelRatio||1, MAP_DPR_MAX);
+  cv.style.width = CW+'px'; cv.style.height = CH+'px';
+  cv.width = Math.round(CW*dpr); cv.height = Math.round(CH*dpr);
+  g.setTransform(dpr,0,0,dpr,0,0);
+  Z = 1; S = fitS;                                  // adatta la vista alla mappa
+  PX = (CW-S*SQ3*(V.cols+0.5))/2; PY = (CH-S*(1.5*V.rows+0.5))/2;
+  draw();
+}
+
+// ---------- interfaccia ----------
+function updateUI(){
+  const st = document.getElementById('status'), p = curPlayer();
+  st.style.borderLeftColor = p ? p.color : '#22c55e';
+  document.documentElement.style.setProperty('--fz', p ? p.color : '#22c55e');   // colore di fazione di turno: usato anche dalle "D" del titolo
+  let msg;
+  if(phase==='tiles') msg = `<b>${p.name}</b>: ruota la tua tessera, scegli dove affiancarla alle altre (◀ ▶) e conferma. Tessera ${step+1}/${NUM_PLAYERS}.`;
+  else if(phase==='colors') msg = `🎨 <b>${p.name}</b>: scegli il tuo colore di fazione.`;
+  else if(phase==='base') msg = `<b>${p.name}</b>: scegli la posizione della base in uno degli angoli liberi (zone evidenziate).`;
+  else if(phase==='cards') msg = `🃏 <b>${p.name}</b>: scegli ${CARDS_PER_PLAYER} carte tattica.`;
+  else if(phase==='over') msg = coopOverTitle() ? `<b>${coopOverTitle()}</b> – ${winner.why}.` : `🏆 <b>Vince ${players[winner.i].name}</b> – ${winner.why}.`;
+  else msg = `<b>Round ${Math.floor(step/NUM_PLAYERS)+1}</b> – turno di <b>${p.name}</b>: seleziona la tua base o una tua unità. 💰 ${p.credits}` + (logMsg ? `<br>${logMsg}` : '');
+  const wait = !isMine() && phase!=='over';
+  st.innerHTML = (wait ? `⏳ Tocca a <b>${p.name}</b>…` + (phase==='play' && logMsg ? `<br>${logMsg}` : '') : msg) + onlineNote();
+  document.getElementById('tilebox').style.display = phase==='tiles' && isMine() ? '' : 'none';
+  syncTimer();
+  const wEl = document.getElementById('winner');                          // banner di vittoria sopra la mappa
+  if(phase==='over'){
+    const winP = players[winner.i];               // Dati del giocatore vincente
+    const fData = FACTION_IMG[winP.color];        // Dati grafici della fazione
+    const imgHq = fData ? `${IMG_DIR}HQ${fData.slot}.png` : '';  // Percorso dell'immagine della base
+
+    wEl.innerHTML = `
+      <div style="margin-bottom: 16px;">
+        ${imgHq ? `<img src="${imgHq}" style="width: 320px; height: 320px; max-width: 80vw; max-height: 45vh; object-fit: contain; filter: drop-shadow(0 0 55px ${winP.color}); pointer-events: none;" alt="Base">` : '<span style="font-size:90px">🏆</span>'}
+      </div>
+      <div style="font-size: 28px; margin-bottom: 6px;">${coopOverTitle() ? `<b style="color:${winP.color}">${coopOverTitle()}</b>` : `Vince <b style="color:${winP.color}">${winP.name}</b>`}</div>
+      <div class="leg" style="color: #cbd5e1; margin-bottom: 18px;">${winner.why}</div>
+      <button id="again" style="padding: 12px 24px; font-size: 16px; font-weight: bold;">${online ? 'Esci' : 'Nuova partita'}</button>
+    `;
+    
+    // Cambia il colore del bordo e aggiunge un alone anche al riquadro esterno
+    wEl.style.borderColor = winP.color;
+    wEl.style.boxShadow = `0 0 60px ${winP.color}55`; 
+    wEl.style.display = 'block';
+  } else {
+    wEl.style.display = 'none';
+  }
+  if(phase==='tiles'){
+    document.getElementById('posLbl').textContent = `Posizione ${candIdx+1}/${cands.length}`;
+    document.getElementById('prevBtn').disabled = document.getElementById('nextBtn').disabled = cands.length<2;
+  }
+  renderCardPicker();
+  renderColorPicker();
+  renderMenu();
+  coopRenderUI();                                 // coop: pannello delle quest
+  updateSurr();
+}
+// ---------- RESA (pulsante nel pannello di sinistra + conferma) ----------
+const surrIdx = () => online ? seat : step%NUM_PLAYERS;      // chi si arrende: io (online) oppure chi è di turno (partita locale, stesso schermo)
+const surrBox = document.getElementById('surrBox');
+function hideSurrConfirm(){ surrBox.style.display = 'none'; }
+function updateSurr(){                                       // il pulsante c'è solo durante la partita e finché non ci si è arresi
+  const p = players && players[surrIdx()], ok = phase==='play' && !!p && !p.surrendered;
+  document.getElementById('surrBtn').style.display = ok ? '' : 'none';
+  if(!ok) hideSurrConfirm();
+}
+document.getElementById('surrBtn').onclick = ()=>{
+  const p = players[surrIdx()]; if(phase!=='play' || !p || p.surrendered) return;
+  surrBox.innerHTML = `🏳️ <b style="color:${p.color}">${p.name}</b>, vuoi davvero arrenderti?<div class="leg">Tutte le tue unità e basi saranno distrutte. Miniere ed edifici restano in mappa e il tuo turno verrà saltato. Non si può annullare.</div><button id="surrYes">Sì, mi arrendo</button><button id="surrNo">Annulla</button>`;
+  surrBox.style.display = 'block';
+};
+surrBox.addEventListener('click',e=>{
+  if(e.target.id==='surrNo') hideSurrConfirm();
+  else if(e.target.id==='surrYes'){ hideSurrConfirm(); send({t:'surrender'}); }
+});
+function buildLegend(){
+  const need = b => b.req ? ` <i>Richiede ${BUILDINGS[b.req].e} ${BUILDINGS[b.req].label}.</i>` : '';
+  document.getElementById('legend').innerHTML = Object.values(TERRAINS)
+    .map(t=>`<div class="leg">${t.e} <b>${t.name}</b>: ${t.rule}</div>`).join('')
+    + `<div class="leg">🌋 <b>Cratere Vulcanico</b>: segno lasciato da un colpo nucleare in tutta l'area d'impatto (decorativo).</div>`
+    + `<div class="leg">💨 <b>Fumogeno</b>: l'artiglieria crea nebbia (☁️ grigia) su qualunque casella; svanisce all'inizio del prossimo turno di chi l'ha lanciato.</div>`;
+  document.getElementById('legendB').innerHTML = Object.values(BUILDINGS)
+    .map(b=>`<div class="leg">${b.e} <b>${b.label}</b> (${b.actions} az.${b.credits?` · 💰${b.credits}`:''}): ${b.rule}${need(b)}</div>`).join('');
+  document.getElementById('legendS').innerHTML = SPECIALS.base          // la base ha tutte le azioni speciali (le unità hanno le stesse tranne "Crea unità")
+    .map(s=>`<div class="leg">${s.e} <b>${s.label}</b>: ${s.rule}</div>`).join('');
+  const B = BUILDINGS;
+  document.getElementById('legendR').innerHTML = [
+    ['🎯', `<b>Obiettivo</b>: vince chi elimina tutte le unità nemiche o tutte le basi nemiche (le unità contano solo se il nemico ne aveva create).`],
+    ['🤝', `<b>Obiettivo in cooperativa</b>: distruggere la base obiettivo dei mostri, protetta da uno scudo infinito che cade solo dopo aver abbattuto tutti i boss e completato ${COOP_QUESTS_NEEDED} quest su ${COOP_QUESTS_COUNT}. Si perde se tutte le basi dei giocatori vengono distrutte.`],
+    ['🗡️', `Unità: massimo ${MAX_UNITS} per fazione.`],
+    ['💰', `Ogni unità nemica uccisa dà +${KILL_REWARD} risorse, ogni base nemica distrutta dà +${BASE_KILL_REWARD} risorse alla fazione di chi la distrugge (anche con artiglieria, silo, difesa e bunker).`],
+    ['🏰', `Ogni base produce +${BASE_INCOME} risorsa a fine turno; ogni miniera +${MINE_INCOME}.`],
+    ['🔭', `Spotter: un colpo di artiglieria o silo fa danno ×${SPOTTER_MULT} se una tua unità può davvero colpire la casella bersaglio con il suo "Attacca" (linea retta, gittata, ostacoli e nebbia contano come nel tiro normale).`],
+    ['💸', `Ogni colpo costa risorse: artiglieria ${ARTILLERY_SHOT_CREDITS}, silo ${SILO_SHOT_CREDITS}, fumogeno ${ARTILLERY_SMOKE_CREDITS}; il colpo nucleare costa ${NUKE_SHOT_COST} in più.`],
+    ['⛏️', `Tutti gli edifici (miniere comprese) passano al nemico se ha un'unità adiacente e non è contestata da unità, basi o bunker adiacenti. Il bunker e la fortezza non si conquistano.`],
+    ['🔗', `Catena degli edifici: ${B.fabbrica.e} Forgia → ${B.forgia.e} Fabbrica → ${B.topTech.e} Top-tech. La forgia sblocca artiglieria, bunker e laboratori; la fabbrica silo e fortezza; il top-tech armi nucleari e shield dome.`],
+    ['💎', `Ogni tessera ha da ${RES_MIN_PER_TILE} a ${RES_MAX_PER_TILE} caselle di risorse.`],
+    ['🏳️', `Resa (pulsante nel pannello a sinistra, con conferma): tutte le tue unità e basi vengono distrutte; miniere ed edifici restano in mappa (e si possono conquistare; il bunker non spara più). Il tuo turno viene saltato. Si può fare anche fuori turno. Se resta un solo giocatore, vince.`],
+    ['📡', `EMP: l'effetto sulla nebbia (e le unità nemiche rivelate) finisce con la fine del turno di chi l'ha lanciato; le azioni perse dai nemici si scontano al loro prossimo turno.`]
+  ].map(([e,t])=>`<div class="leg">${e} ${t}</div>`).join('');
+}
+// ================== ESITO DELLE AZIONI ==================
+// send() e tutta la rete (host PeerJS, client, partita locale) stanno in dnet.js.
+// Esito di un'azione (locale: subito; online: quando arriva lo stato dal server). mine = l'ho fatta io.
+function handleResult(a,res,prevPhase,mine){
+  if(!res.ok){ logMsg = '⚠️ '+res.err; playSFX('shield'); updateUI(); redraw(); return; }   // avviso: stesso suono dei messaggi del vecchio gioco
+  if(COOP) res = {...res, events:coopFilterEvents(res.events||[])};   // coop: niente spari o esplosioni in caselle che non si vedono
+  if(res.log || phase==='play') logMsg = res.log;
+  sfxFor(a,res);                                      // suoni (dassets.js): niente file = nessun suono
+  if(a.t!=='sync'){
+    if(phase==='play' && prevPhase!=='play') setTimeout(()=>playSFX('intro'),500);   // inizio partita (come il vecchio gioco)
+    if(phase==='over' && prevPhase!=='over') setTimeout(()=>playSFX('intro'),300);   // fine partita: suono dell'overlay di vittoria
+  }
+  if(a.t==='chooseColor' && mine){ const col = online ? (players[seat]||{}).color : a.color; if(col) playFactionMusic(col); }   // scelto il colore, parte la traccia della sua fazione
+  const lag = fxLag(res.events);                      // ms di volo di artiglieria, silo o nucleare: danni e lampo aspettano l'arrivo (dfx.js)
+  res.events.forEach(ev=>{
+    if(ev.t==='flash'){                               // lampo sulle caselle colpite
+      const wait = fxStrikeWait(ev);
+      fx = {cells:ev.cells, rgb:HL_RGB[ev.kind], from:Date.now()+wait, until:Date.now()+wait+FX_MS};
+      setTimeout(()=>redraw(),wait);
+      setTimeout(()=>{ if(fx && Date.now()>=fx.until){ fx = null; redraw(); } },wait+FX_MS+50);
+      fxEvent(ev,lag);                                // proiettile o missile in volo (dfx.js)
+    } else if(ev.t==='banner') cardBanner(CARDS[ev.card]);
+    else fxEvent(ev,lag);                             // spari, fendenti, scintille, esplosioni, movimento (dfx.js)
+  });
+  if(a.t==='placeTile' || a.t==='chooseColor' || a.t==='sync'){ candIdx = 0; rotN = 0; }     // nuova tessera: anteprima da capo
+  if(a.t==='confirmCards' || (phase==='cards' && prevPhase!=='cards')) startCardSelection();
+  if(a.t==='endTurn' || a.t==='sync'){ cardMode = null; upg = null; }
+  if(mine){                                           // seguiti dell'azione che ho fatto io
+    if(a.t==='upgrade'){ upg = null; cardMode = null; menuPath = ['carte']; }
+    else if(a.t==='newCard'){ ncSlot = ncPick = null; menuPath = []; }
+    else if(a.t==='fortino'){ const e = selEntity(); if(!(e && e.fortinoBuilds>0)){ mode = null; cardMode = null; } }   // il Fortino resta attivo finché ci sono barricate
+  }
+  if(phase!=='play' || !isMine() || !selEntity()){ sel = null; menuPath = []; mode = null; }   // turno cambiato, partita finita o entità distrutta
+  if(a.t==='placeTile' || a.t==='chooseColor' || a.t==='sync'){ updateUI(); layout(); } else { updateUI(); redraw(); }
+}
+
+// ================== TURNI E MENU AZIONI ==================
+function entityAt(c,r){                              // id della base, unità o edificio del giocatore di turno in (c,r)
+  const p = curPlayer();
+  const e = p.bases.find(b=>b.c===c&&b.r===r) || p.units.find(u=>u.c===c&&u.r===r) || p.structs.find(s=>s.c===c&&s.r===r);
+  return e ? e.id : null;
+}
+const selEntity = () => sel==null ? null : findEnt(sel);
+
+function modeNote(e){                                // messaggio mostrato mentre si sceglie la casella
+  switch(mode){
+    case 'build':     return 'Scegli un esagono evidenziato accanto alla base.';
+    case 'move':      return T(e.c,e.r).oneStepOnly ? 'Sei nel fango: ti puoi muovere di 1 sola casella.' : `Scegli dove muoverti (fino a ${moveOf(e)} passi).`;
+    case 'demolish':  return demolishTargets(e).length ? `Scegli cosa demolire tra le caselle adiacenti (danno ${DEMOLISH_DAMAGE}, anche unità e basi alleate!).`
+                      : `Niente da demolire accanto a te (servono ${DEMOLISH_COST} azioni).`;
+    case 'collect':   return collectTargets(e).length ? `Scegli la risorsa adiacente da raccogliere (+${RESOURCE_VALUE}).` : 'Nessuna risorsa adiacente raccoglibile.';
+    case 'construct': return pending.id==='miniera' ? 'Scegli la casella con le risorse adiacente dove costruire la miniera.' : pending.id==='bunker' ? 'Scegli la casella adiacente dove costruire il bunker (va bene qualunque terreno: nebbia, montagne, acqua, fango...).' : `Scegli la casella vuota adiacente dove costruire: ${pending.label}.`;
+    case 'heal':      return healTargets(e).length ? `Scegli chi curare (+${HEAL_AMOUNT} vita): te stesso, un'unità o base adiacente (anche nemica) o un oggetto danneggiato.`
+                      : 'Nessun bersaglio ferito (te stesso, unità e basi adiacenti, oggetti danneggiati).';
+    case 'infect':    return 'Scegli la base di mostri adiacente da infettare (1 azione): non creerà più mostri.';
+    case 'techArmor': return `Scegli l'unità o base adiacente (anche nemica) a cui dare +${TECH_ARMOR_BONUS} armatura permanente (max ${TECH_ARMOR_MAX}). Costo 💰${TECH_ARMOR_COST}.`;
+    case 'shell':     return `Scegli l'esagono da colpire (tiro ${rangeText(BUILDINGS[e.type].minRange,BUILDINGS[e.type].maxRange)}, danno ${BUILDINGS[e.type].damage}, ×${SPOTTER_MULT} se una tua unità può davvero colpire il bersaglio, anche su caselle vuote).`;
+    case 'smoke':     return `Scegli la casella su cui lanciare il fumogeno (tiro ${rangeText(BUILDINGS[e.type].minRange,BUILDINGS[e.type].maxRange)}): ci sarà nebbia fino al tuo prossimo turno.`;
+    case 'nuke':      return `☢️ Scegli il punto d'impatto: danno ${NUKE_DAMAGE} lì e nelle caselle entro ${NUKE_RADIUS} (anche alleate!). Costo 💰${NUKE_SHOT_COST}.`;
+    case 'airdrop':   return `Scegli l'esagono libero dove atterrare (${AIRDROP_COST} azioni).`;
+    case 'fortino':   return `Fortino: scegli un esagono vuoto (o una roccia da rinforzare). Barricate rimaste: ${e.fortinoBuilds>0 ? e.fortinoBuilds : FORTINO_BUILDS}.`;
+    default:          return e.sniperBuff ? 'Cecchino: scegli un esagono in rosso lungo una linea (anche vuoto, per l\'esplosione).'
+                                          : 'Scegli la casella da colpire (anche vuota): si spara solo in linea retta lungo i lati in comune.';
+  }
+}
+function renderMenu(){
+  const el = document.getElementById('menu'), e = phase==='play' && isMine() ? selEntity() : null;
+  if(!e){ el.style.display = 'none'; return; }
+  const p = curPlayer(), kind = entKind(e), isU = kind==='unit', isS = kind==='struct', sb = isS ? BUILDINGS[e.type] : null, path = menuPath.join('/'), noAct = e.actions<1;
+  el.style.setProperty('--btn-bg', shade(p.color, 0.25));       // Pulsante normale (25% della luminosità originale)
+  el.style.setProperty('--btn-bg-hover', shade(p.color, 0.38)); // Pulsante al passaggio del mouse (38%)
+  const btn = (id,label,dis) => `<button data-id="${id}"${dis?' disabled':''}>${label}</button>`;
+  const note = t => `<div class="leg">${t}</div>`;
+  const title = isS ? sb.e+' '+sb.label : isU ? UNIT_EMOJI+' Unità' : '🏰 Base';
+  let h = `<h3 style="border-left:6px solid ${p.color};padding-left:8px;color:${p.color}">${title} ${p.name}</h3>`;
+  if(!isS || sb.shoots || sb.dome || sb.fires || sb.techArmor) h += `<div class="mstat"><span>Azioni</span><span class="pips">${'●'.repeat(e.actions)}${'○'.repeat(Math.max(0,ACTIONS_PER_TURN-e.actions))} ${e.actions}/${ACTIONS_PER_TURN}</span></div>`;
+  h += `<div class="mstat"><span>Crediti</span><b>💰 ${p.credits}</b></div>`;
+  if(isS){
+    const rng = sb.shoots ? (sb.maxRange===Infinity ? '∞' : sb.minRange+'–'+sb.maxRange) : e.st.gittata, dm = sb.shoots ? sb.damage : e.st.attacco;
+    h += `<div class="mstat"><span>💚 ${statNum('vita',e.hp+'/'+maxHp(e))}</span>${sb.shoots || sb.autoDefend ? `<span>🎯 ${statNum('gittata',rng)} · ⚔️ ${statNum('attacco',dm)}</span>` : ''}</div>`;
+  } else h += `<div class="mstat"><span>💚 ${statNum('vita',e.hp+'/'+maxHp(e))} · 👣 ${statNum('passi',moveOf(e))}</span><span>🎯 ${statNum('gittata',rangeOf(e))} · ⚔️ ${statNum('attacco',attackOf(e))}</span></div>`;
+  h += '<hr>';
+  if(noAct && (!isS || sb.shoots || sb.dome || sb.fires || sb.techArmor)) h += note('Nessuna azione rimasta in questo turno.');
+  // --- INIZIO NUOVA GESTIONE MENU ---
+  if(mode) h += note(modeNote(e)) + btn('cancel','✖ Annulla');
+  // SPOSTATO IN ALTO: Il menu delle carte ha la precedenza assoluta se è stato cliccato
+  else if(path==='carte' || path==='carte/upgrade'){
+    h += cardsMenuHtml(e,p,path,btn,note);
+  }
+  else if(isS){                                        // edificio selezionato
+    h += note(sb.rule);
+    if(sb.shoots){
+      const nuc = hasNuclear(p);
+      h += btn('shell',`💥 Spara — ${sb.shotActions} az. · 💰${shotCredits(e,false,false)}`,noAct || !shellTargets(e,false,false).length);
+      if(sb.smoke) h += btn('smoke',`💨 Fumogeno — ${sb.shotActions} az. · 💰${shotCredits(e,false,true)}`,noAct || !shellTargets(e,false,true).length);
+      h += btn('nuke',`☢️ Colpo nucleare — 💰${shotCredits(e,true,false)}`,noAct || !nuc || !shellTargets(e,true,false).length);
+      if(!nuc) h += note(`Il colpo nucleare richiede l'edificio ${BUILDINGS.nucleare.e} ${BUILDINGS.nucleare.label}.`);
+    } else if(sb.dome){
+      const lay = domeLayers(e), zone = domeZone(e), cov = zone.filter(([c,r])=>(domeCs(e)[key(c,r)]||0)>0).length;
+      h += note(`Scudi: <b>${lay>0 ? 'attivi' : 'esauriti'}</b> · carica massima ${lay}/${DOME_MAX_SHIELD} · caselle protette ${cov}/${zone.length}. Ogni casella ha i suoi scudi.`);
+      h += btn('domeshield',`🛡️ Crea scudo — ${DOME_SHIELD_ACTIONS} az. · 💰${DOME_SHIELD_COST}`,e.actions<DOME_SHIELD_ACTIONS || p.credits<DOME_SHIELD_COST || domeFull(e));
+    } else if(sb.techArmor){                             
+      h += btn('techarmor',`🔰 Armatura — ${TECH_ARMOR_ACTIONS} az. · 💰${TECH_ARMOR_COST}`,!techArmorTargets(e).length);
+      if(!techArmorTargets(e).length) h += note(`Servono ${TECH_ARMOR_ACTIONS} azione, 💰${TECH_ARMOR_COST} e un'unità o base adiacente con meno di ${TECH_ARMOR_MAX} armatura.`);
+    } else if(sb.fires){                                 
+      h += btn('attacca','⚔️ Attacca — 1 az.',noAct || !targets(e).length);
+      h += btn('carte','👉🃏 Usa Tattica ▸'); // <-- AGGIUNTO IL TASTO CARTE AL BUNKER!
+    } else if(!sb.autoDefend) h += note('Effetto passivo: nessuna azione da fare.');
+  } else if(path==='speciali/nuovacarta'){
+    h += newCardMenuHtml(e,p,btn,note);                
+  } else if(path==='speciali/crea'){
+    h += btn('back','◀ Indietro') + unitPreviewHtml(p);   
+    const free = freeNeighbors(e.c,e.r).length, cost = unitCost(draft);
+    const pi = step%NUM_PLAYERS;
+    STATS.forEach(s=>{
+      draft[s.id] = Math.min(draft[s.id],statMax(s.id,pi));   
+      h += `<div class="mstat"><span>${s.e} ${s.label} <span style="opacity:.8">💰${statCost(s.id)}</span></span><span>`
+        + `<button class="sbtn" data-id="dec:${s.id}"${draft[s.id]<=STAT_MIN?' disabled':''}>−</button>${statNum(s.id,draft[s.id])}`
+        + `<button class="sbtn" data-id="inc:${s.id}"${draft[s.id]>=statMax(s.id,pi)||cost+statCost(s.id)>p.credits?' disabled':''}>+</button></span></div>`;
+    });
+    h += `<div class="mstat"><span>Costo</span><b>💰 ${cost} / ${p.credits}</b></div>`;
+    if(!free) h += note('Nessun esagono libero accanto alla base.');
+    if(p.units.length>=MAX_UNITS) h += note(`<b>Limite raggiunto: ${MAX_UNITS} unità per fazione.</b>`);
+    h += btn('confirm','✔ Crea unità',noAct||!free||cost>p.credits||p.units.length>=MAX_UNITS);
+  } else if(path==='speciali/costruisci'){
+    h += btn('back','◀ Indietro');
+    const freeEmpty = constructTargets(e).length;
+    if(!freeEmpty) h += note('Nessuna casella vuota adiacente dove costruire.');
+    h += '<div class="leg"><b>Edifici</b></div>';
+    Object.entries(BUILDINGS).forEach(([id,b])=>{
+      const why = buildBlock(e,p,id), free = constructTargets(e,{type:'building',id}).length;
+      const need = b.req ? `${BUILDINGS[b.req].e} ${BUILDINGS[b.req].label}` : '';
+      h += btn('bld:'+id,`${b.e} ${b.label} — ${b.actions} az.${b.credits?` · 💰${b.credits}`:''}${why==='max'?' ✓ già costruito':''}${why==='req'?` 🔒 serve ${need}`:''}${why==='quest'?` 🔒 servono ${COOP_QUESTS_NEEDED} quest`:''}${id==='miniera' && !free?' (serve una risorsa adiacente)':''}`,!free||!!why);
+    });
+    h += `<div class="leg"><b>Terreni</b> (${BUILD_TERRAIN_COST} azioni, nebbia ${BUILD_FOG_COST})</div>`;
+    BUILDABLE_TERRAINS.forEach(k=>{
+      h += btn('ter:'+k,`${TERRAINS[k].e} ${TERRAINS[k].name} — ${terrainBuildCost(k)} az.`,!freeEmpty||e.actions<terrainBuildCost(k));
+    });
+  } else {
+    const spBtn = id => {                                // azione presa da SPECIALS (per le unità "crea" non esiste: niente pulsante)
+      const s = SPECIALS[kind].find(x=>x.id===id); if(!s) return '';
+      const act = !!(s.mode||s.instant), on = id==='difesa' && !!e.defending;
+      const cost = id==='difesa' ? DEFENSE_COST : id==='raccogli' ? COLLECT_COST : id==='demolisci' ? DEMOLISH_COST : 0;
+      const dis = (act && noAct) || on || (cost && e.actions<cost) || (id==='crea' && p.units.length>=MAX_UNITS)
+        || (id==='infetta' && !coopInfectTargets(e).length);   // niente base di mostri adiacente (o già infettata / base finale)
+      return btn(id,(s.e?s.e+' ':'')+s.label+(cost?` — ${cost} az.`:'')+(on?' ✓':(act?'':' ▸')),dis);
+    };
+    h += spBtn('crea') + btn('muovi','👣 Muovi',!isU||noAct||!reachable(e).size) + btn('attacca','⚔️ Attacca',noAct||!targets(e).length)
+       + spBtn('difesa') + spBtn('cura') + spBtn('costruisci') + spBtn('demolisci') + spBtn('raccogli')
+       + spBtn('infetta')                                // coop: compare solo se l'azione è in SPECIALS (la aggiunge coopSync); per la base e in war ritorna ''
+       + spBtn('nuovacarta') + btn('carte','👉🃏 Usa Tattica ▸');
+    if(!isU) h += note('La base non può muoversi.');
+  }
+  el.innerHTML = bigEmoji(h); el.style.display = 'block';
+}
+const EMOJI_RE = /(<[^>]*>)|((?:\p{Extended_Pictographic}\uFE0F?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*))/gu;   // tag HTML (si saltano) | emoji
+const bigEmoji = h => h.replace(EMOJI_RE,(m,tag,em)=> tag || /^[◀▶✔✖✓]/.test(em) ? m : `<span class="em">${em}</span>`);   // frecce e spunte restano come sono
+let menuTap = false;   // true solo se il dito/mouse è stato davvero premuto sul menu (evita il "click fantasma" del tocco sulla mappa)
+document.getElementById('menu').addEventListener('pointerdown',()=>{ menuTap = true; });
+document.getElementById('menu').addEventListener('click',ev=>{
+  const wasTap = menuTap; menuTap = false;
+  if(!wasTap) return;   // click senza pressione sul menu = tocco sulla mappa finito sotto il menu appena comparso: ignorato
+  const b = ev.target.closest('button'); if(!b || b.disabled || !isMine() || awaiting) return;
+  const id = b.dataset.id, se = selEntity();
+  if(cardMenuAction(id)){ /* gestito dal modulo carte */ }
+  else if(id.startsWith('uimg:')) unitImgStep(+id.slice(5),curPlayer());   // immagine precedente / successiva
+  else if(id==='back') menuPath = menuPath[0]==='speciali' ? [] : menuPath.slice(0,-1);   // dai sottomenu delle azioni si torna al menu principale
+  else if(id==='carte') menuPath = [id];
+  else if(id==='muovi' || id==='attacca') mode = id==='muovi' ? 'move' : 'attack';
+  else if(id==='shell' || id==='nuke' || id==='smoke') mode = id;                  // artiglieria / silo: colpo normale, nucleare o fumogeno
+  else if(id==='domeshield') send({t:'domeShield', ent:sel});                      // shield dome: ricompra lo scudo
+  else if(id==='techarmor') mode = 'techArmor';                                    // top-tech: si sceglie il bersaglio sulla mappa
+  else if(id==='confirm') mode = 'build';
+  else if(id==='cancel') cancelMode();
+  else if(id.startsWith('inc:') || id.startsWith('dec:')){
+    const k = id.slice(4); draft[k] = Math.min(statMax(k,step%NUM_PLAYERS),Math.max(STAT_MIN,draft[k]+(id[0]==='i'?1:-1)));
+  } else if(id.startsWith('bld:') || id.startsWith('ter:')){
+    const isB = id[0]==='b', k = id.slice(4);
+    pending = {type:isB?'building':'terrain', id:k, label:isB?BUILDINGS[k].label:TERRAINS[k].name}; mode = 'construct';
+  } else if(se && SPECIALS[entKind(se)].some(s=>s.id===id)){
+    const sp = SPECIALS[entKind(se)].find(s=>s.id===id);
+    if(sp.mode) mode = sp.mode;                      // azione immediata: si sceglie l'esagono sulla mappa
+    else if(sp.instant) send({t:'defend', ent:sel}); // azione immediata senza scelta dell'esagono (Difesa)
+    else { menuPath = ['speciali',id]; if(id==='crea'){ draft = newDraft(); resetUnitImg(curPlayer()); } }
+  }
+  updateUI(); redraw();                                // aggiorna anche stato e contatore risorse
+});
+function cancelMode(){                               // annulla la scelta dell'esagono (anche cliccando altrove)
+  const e = selEntity();
+  if(mode==='fortino' && e && e.fortinoBuilds>0) send({t:'cancelFortino', ent:sel});   // le barricate rimaste si perdono, la carta resta consumata
+  mode = null; cardMode = null;
+}
+function doAction(c,r){                              // modalità scelta + esagono cliccato = UNA azione verso il nucleo
+  const e = selEntity(), at = {ent:sel,c,r}, slot = cardMode ? cardMode.slot : undefined;
+  let a = null;
+  if(mode==='build'){ a = {t:'createUnit',...at,stats:{...draft},img:draftImg}; draft = newDraft(); }
+  else if(mode==='move') a = {t:'move',...at};
+  else if(mode==='attack') a = {t:'attack',...at};
+  else if(mode==='demolish') a = {t:'demolish',...at};
+  else if(mode==='collect') a = {t:'collect',...at};
+  else if(mode==='construct'){ a = {t:'construct',...at,build:{type:pending.type,id:pending.id}}; pending = null; }
+  else if(mode==='airdrop') a = {t:'airdrop',...at,slot};
+  else if(mode==='fortino') a = {t:'fortino',...at,slot:e.fortinoBuilds>0 ? undefined : slot};   // la carta serve solo al primo piazzamento
+  else if(mode==='heal') a = {t:'heal',...at};
+  else if(mode==='techArmor') a = {t:'techArmor',...at};
+  else if(mode==='infect') a = {t:'infect',...at};
+  else if(mode==='shell' || mode==='nuke' || mode==='smoke') a = {t:'structFire',...at,nuke:mode==='nuke',smoke:mode==='smoke'};
+  if(!a) return;
+  if(mode!=='fortino'){ mode = null; cardMode = null; }   // la modalità finisce con l'azione (il Fortino resta attivo finché ci sono barricate: lo decide handleResult)
+  send(a);
+}
+
+// ---------- timer del turno ----------
+let turnEnd = 0, turnKey = null;                     // scadenza (ms) e turno a cui si riferisce
+const timeLeft = () => Math.max(0,Math.ceil((turnEnd-Date.now())/1000));
+function syncTimer(){                                // a ogni nuovo turno di gioco il tempo riparte da TURN_SECONDS
+  if(online){ renderTimer(); return; }                 // online: il tempo lo decide il server
+  const k = phase==='play' ? step : null;
+  if(k!==turnKey){ turnKey = k; turnEnd = Date.now()+TURN_SECONDS*1000; }
+  renderTimer();
+}
+let turnHtml = '', resHtml = '';                      // ultimo contenuto scritto (si riscrive solo se cambia)
+function renderTimer(){
+  const tb = document.getElementById('topbar'), b = document.getElementById('turnBtn');
+  if(phase!=='play'){ tb.style.display = 'none'; return; }
+  tb.style.display = 'block';
+  const p = curPlayer(), s = timeLeft();
+  b.style.borderColor = p.color; b.classList.toggle('low',s<=10);
+  const html = `<span class="tn">Round ${Math.floor(step/NUM_PLAYERS)+1} · <b style="color:${p.color}">${p.bot?'🤖 ':''}${p.name}</b></span><span class="tt">⏳ ${s}s ⏭</span>`;
+  if(html!==turnHtml){ b.innerHTML = html; turnHtml = html; }   // si riscrive solo se cambia, così il tocco non perde il bersaglio
+  renderRes();
+}
+function renderRes(){                                // a destra del timer: risorse di ogni fazione (quella di turno è evidenziata)
+  const box = document.getElementById('resBox');
+  box.style.gridTemplateColumns = `repeat(${Math.min(3,players.length)},auto)`;
+  const html = players.map(p=>`<span class="rc" style="border-color:${p.color}">${p.surrendered?'🏳️ ':''}${p.bot?'🤖 ':''}💰 ${p.credits}</span>`).join('');
+  if(html!==resHtml){ box.innerHTML = html; resHtml = html; }
+}
+setInterval(()=>{ if(phase!=='play') return; if(!online && timeLeft()<=0) send({t:'endTurn'}); else renderTimer(); },250);
+document.getElementById('turnBtn').onclick = e=>{ e.currentTarget.blur(); send({t:'endTurn'}); };   // cliccando il timer si passa il turno
+document.getElementById('winner').addEventListener('click',e=>{ if(e.target.id==='again'){ if(online) leaveRoom(); else location.reload(); } });
+// ================== fine turni e menu ==================
+
+function pick(e){
+  const b = cv.getBoundingClientRect(), mx = e.clientX-b.left, my = e.clientY-b.top;
+  const gh = phase==='tiles' && isMine() ? cands[candIdx] : null;
+  let best = null, bd = 1e9;
+  for(let r=V.minR;r<V.minR+V.rows;r++) for(let c=V.minC;c<V.minC+V.cols;c++){
+    const inGhost = gh && Math.floor(c/TILE)===gh[0] && Math.floor(r/TILE)===gh[1];
+    if(!exists(c,r) && !inGhost) continue;
+    const [x,y] = ctr(c,r), d = Math.hypot(mx-x,my-y);
+    if(d<bd){bd=d;best={c,r,inGhost};}
+  }
+  return bd <= S*0.9 ? best : null;
+}
+
+// ---------- azioni ----------
+let raf = 0;
+const MAX_FPS = 15, MIN_FRAME_MS = 1000 / MAX_FPS;   // tetto di fotogrammi al secondo della mappa
+let lastDrawT = 0;
+const redraw = () => { if(!raf) raf = requestAnimationFrame(function tick(ts){
+  if(ts - lastDrawT < MIN_FRAME_MS - 4){ raf = requestAnimationFrame(tick); return; }   // troppo presto: aspetta il prossimo fotogramma
+  raf = 0; lastDrawT = ts;
+  const t0 = performance.now(); draw(); fpsFrame(performance.now() - t0);               // misura quanto ci mette a disegnare
+}); };
+
+// ---------- CONTATORE FPS (legenda, a destra del titolo) ----------
+// Conta i fotogrammi davvero disegnati dalla mappa. A mappa ferma non si disegna nulla: appare "riposo".
+// "picco" = fotogramma più lento negli ultimi 5 secondi (a 15 fps il budget è ~66 ms).
+const fpsLog = [];                                   // [istante, ms impiegati a disegnare]
+let drawAvgMs = 0;                                   // media mobile del tempo di disegno: non si azzera a riposo
+const SLOW_DRAW_MS = 60;                             // sopra questa media il dispositivo è "lento": niente animazione di movimento (0 = sempre saltata, utile per provare)
+function isSlowDevice(){ return drawAvgMs > SLOW_DRAW_MS; }
+function fpsFrame(ms){
+  fpsLog.push([performance.now(), ms]);
+  drawAvgMs = drawAvgMs ? drawAvgMs*0.7 + ms*0.3 : ms;   // pesa di più gli ultimi fotogrammi: un singolo picco non basta a farla scattare
+}
+setInterval(()=>{
+  const el = document.getElementById('fpsBox'); if(!el) return;
+  const now = performance.now();
+  while(fpsLog.length && now - fpsLog[0][0] > 5000) fpsLog.shift();            // tiene solo gli ultimi 5 secondi
+  if(!fpsLog.length){ el.textContent = 'riposo'; el.style.color = '#9ca3af'; return; }
+  const recent = fpsLog.filter(f => now - f[0] <= 1000);                       // fotogrammi dell'ultimo secondo
+  const peak = Math.max(...fpsLog.map(f => f[1]));
+  const fps = recent.length >= 3 ? Math.round((recent.length - 1) * 1000 / (recent[recent.length-1][0] - recent[0][0])) : 0;
+  el.textContent = (fps ? fps + ' fps' : 'riposo') + ' · picco ' + Math.round(peak) + ' ms' + (isSlowDevice() ? ' · lento' : '');
+  el.style.color = peak > 66 ? '#ef4444' : peak > 33 ? '#f59e0b' : '#9ca3af';
+}, 500);
+
+function zoomAt(mx,my,f){                            // zoom attorno al punto (mx,my) in pixel
+  const nz = Math.min(5, Math.max(0.4, Z*f)); f = nz/Z;
+  PX = mx-(mx-PX)*f; PY = my-(my-PY)*f;              // il punto sotto il cursore resta fermo
+  Z = nz; S = fitS*Z; redraw();
+}
+const ptrs = new Map(); let moved = false;
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{
+  menuTap = false;                                   // ogni pressione sulla mappa azzera la "pressione sul menu"
+  cv.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY});
+  moved = ptrs.size>1;                               // con più dita non c'è click
+});
+cv.addEventListener('pointermove',e=>{
+  const p = ptrs.get(e.pointerId);
+  if(!p){ hover = pick(e); redraw(); return; }       // mouse senza tasti premuti
+  const dx = e.clientX-p.x, dy = e.clientY-p.y;
+  if(ptrs.size===1){
+    if(!moved && Math.hypot(e.clientX-p.sx,e.clientY-p.sy)<6) return; // ancora un click
+    moved = true; PX += dx; PY += dy;
+  } else if(ptrs.size===2){                          // pizzico: zoom + spostamento
+    const [a,b] = [...ptrs.values()], d0 = Math.hypot(a.x-b.x,a.y-b.y);
+    p.x = e.clientX; p.y = e.clientY;
+    const d1 = Math.hypot(a.x-b.x,a.y-b.y), r = cv.getBoundingClientRect();
+    zoomAt((a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top,d1/d0);
+    PX += dx/2; PY += dy/2;
+  }
+  p.x = e.clientX; p.y = e.clientY; redraw();
+});
+cv.addEventListener('pointerup',e=>{
+  const had = ptrs.delete(e.pointerId);
+  if(had && !moved && ptrs.size===0 && e.button===0) onClick(pick(e));
+});
+cv.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
+cv.addEventListener('pointerleave',()=>{ hover = null; redraw(); });
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), dy = e.deltaY*(e.deltaMode===1?16:1);
+  zoomAt(e.clientX-r.left, e.clientY-r.top, Math.exp(-dy*0.0015));
+},{passive:false});
+function onClick(h){
+  hover = h; if(!h || !isMine() || awaiting || lobbyOpen()) return;
+  if(phase==='tiles'){ if(h.inGhost) placeTileUI(); return; }
+  if(phase==='base'){
+    if(!highlights().has(key(h.c,h.r))) return;
+    send({t:'placeBase', c:h.c, r:h.r});
+  } else if(phase==='play'){
+    if(mode){
+      if(highlights().has(key(h.c,h.r))) doAction(h.c,h.r); else cancelMode();      // clic altrove = annulla
+    } else { sel = entityAt(h.c,h.r); menuPath = []; if(sel!=null) playSFX('click'); }   // null = deseleziona; selezionando unità, base o edificio si sente il click
+  } else return;
+  updateUI(); redraw();
+}
+function startNewGame(){                             // nuova partita: stato di gioco + stato locale da capo
+  newGame();
+  hover = null; sel = null; menuPath = []; mode = null; draft = newDraft(); logMsg = ''; fx = null; pending = null; candIdx = 0; rotN = 0; resetCardsUI();
+  updateUI(); layout();
+}
+document.getElementById('sideBtn').onclick = ()=>{            // mostra/nasconde il pannello di sinistra e adatta la mappa allo spazio
+  const hid = document.body.classList.toggle('side-hidden'), b = document.getElementById('sideBtn');
+  b.textContent = hid ? '▶' : '◀'; b.title = hid ? 'Mostra il pannello a sinistra' : 'Nascondi il pannello a sinistra';
+  layout();
+};
+// ---------- SCHERMO INTERO (solo se il dispositivo/browser lo permette; parte solo da un tocco dell'utente, mai in automatico) ----------
+(function(){
+  const btn = document.getElementById('fsBtn'), root = document.documentElement;
+  const reqFn = root.requestFullscreen || root.webkitRequestFullscreen;
+  const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+  const allowed = (document.fullscreenEnabled || document.webkitFullscreenEnabled) && reqFn && exitFn;
+  if(!allowed) return;                                   // non supportato (es. iPhone): il pulsante resta nascosto
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const refresh = () => {
+    btn.textContent = isFs() ? '⛶ Esci da schermo intero' : '⛶ Schermo intero';
+    btn.title = isFs() ? 'Esci dallo schermo intero' : 'Schermo intero';
+    layout();                                            // la mappa si adatta alla nuova dimensione
+  };
+  btn.style.display = '';
+  btn.onclick = ()=>{
+    try{
+      const p = isFs() ? exitFn.call(document) : reqFn.call(root);
+      if(p && p.catch) p.catch(()=>{ btn.style.display = 'none'; });   // il browser rifiuta: niente forzature, il pulsante sparisce
+    }catch(err){ btn.style.display = 'none'; }
+  };
+  document.addEventListener('fullscreenchange', refresh);
+  document.addEventListener('webkitfullscreenchange', refresh);
+  document.addEventListener('click', e=>{                // primo click ovunque sullo schermo (una sola volta): entra a schermo intero
+    if(e.target.closest && e.target.closest('#fsBtn')) return;   // se il primo click è sul pulsante, ci pensa lui
+    if(isFs()) return;
+    try{
+      const p = reqFn.call(root);
+      if(p && p.catch) p.catch(()=>{});                  // il browser rifiuta: nessun messaggio, il pulsante ⛶ resta disponibile
+    }catch(err){}
+  }, {once:true, capture:true});
+})();
+document.getElementById('rotBtn').onclick = rotTile;
+document.getElementById('fitBtn').onclick = layout;
+document.getElementById('prevBtn').onclick = ()=>cycle(-1);
+document.getElementById('nextBtn').onclick = ()=>cycle(1);
+document.getElementById('placeBtn').onclick = placeTileUI;
+let localSetup = {n:2, bots:0};   // scelta fatta nel menu iniziale (dnet.js, pulsante partita locale): la usa restart() per la "Nuova partita" della schermata finale
+const restart = ()=>{ const cp = coopLobbyPrep(localSetup.n, localSetup.bots, true); NUM_PLAYERS = cp.n; NUM_BOTS = cp.bots; startNewGame(); };   // coop: giocatori = umani, bot = basi nemiche; locale: possono giocare solo bot NUM_PLAYERS = cp.n; NUM_BOTS = cp.bots; startNewGame(); };   // coop: giocatori = umani, bot = basi nemiche
+document.addEventListener('keydown',e=>{
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if(e.key==='r'||e.key==='R') rotTile();
+  else if(e.key==='0') layout();
+  else if(e.key==='ArrowLeft') cycle(-1);
+  else if(e.key==='ArrowRight') cycle(1);
+  else if(e.key==='Enter') placeTileUI();
+});
+window.addEventListener('resize',layout);
+
+buildLegend();
+startNewGame();
+initNet();
+</script>
+</body>
+</html>
