@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#10160f">
+<title>AIRGRUNT</title>
+<style>
+:root{--bg:#e9efe6;--fg:#1b2a1b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+html,body{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+input,textarea,select{user-select:text;-webkit-user-select:text}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10160f;--fg:#dfe9dc}}
+:root[data-theme="dark"]{--bg:#10160f;--fg:#dfe9dc}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:system-ui,sans-serif}
+#c{display:block;width:100%;height:100%;cursor:none;touch-action:none}
+
+@keyframes subtleMove {
+  0% { background-position: 0% 0%; background-size: 115% 115%; }
+  25% { background-position: 18% 5%; background-size: 125% 125%; }
+  50% { background-position: 8% 18%; background-size: 120% 120%; }
+  75% { background-position: 15% 15%; background-size: 130% 130%; }
+  100% { background-position: 0% 0%; background-size: 115% 115%; }
+}
+#lobby{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(rgba(8,12,8,0.35), rgba(8,12,8,0.35)), url('img/AGintro.png');background-size:cover;background-position:center;color:#eee;z-index:5;animation:subtleMove 15s ease-in-out infinite}
+
+#lobby .box{background:rgba(27, 42, 27, 0.3);border:2px solid #3fae4a;border-radius:10px;padding:20px;width:min(92vw,360px);font:14px system-ui,sans-serif}
+#lobby h1{margin:0 0 12px;font-size:20px;letter-spacing:.08em}
+#lobby input,#lobby button,#lobby select{font:inherit;padding:8px;border-radius:6px;border:1px solid #3fae4a;background:#0f1a0f;color:#eee;box-sizing:border-box;width:100%}
+#lobby button{cursor:pointer;background:#2a4d2a}
+#lobby .row{display:flex;gap:8px;margin:8px 0}
+#lobby .row>*{flex:1;min-width:0}
+#lobby input[type=range]{padding:0;border:0;background:transparent;accent-color:#3fae4a}
+.sw{width:34px;height:34px;border-radius:50%;border:3px solid transparent;cursor:pointer;flex:none}
+.sw.on{border-color:#fff}
+#lobSt{min-height:18px;font-size:13px;color:#ffd23f}
+#fs{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:10px;z-index:6;width:40px;height:40px;padding:0;border-radius:8px;border:1px solid #3fae4a;background:rgba(15,26,15,.75);color:#eee;font:22px/1 system-ui,sans-serif;cursor:pointer}
+#bgmToggle{position:fixed;top:calc(55px + env(safe-area-inset-top,0px));right:10px;z-index:9;width:36px;height:36px;padding:0;border-radius:8px;border:1px solid #3fae4a;background:rgba(15,26,15,.75);color:#eee;font:18px/1 system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#bgmSlider{position:fixed;top:calc(55px + env(safe-area-inset-top,0px));right:52px;z-index:9;display:none;flex-direction:column;align-items:stretch;gap:5px;padding:8px 10px;border-radius:8px;border:1px solid #3fae4a;background:rgba(15,26,15,.92);color:#eee;font:11px/1 system-ui,sans-serif;min-width:170px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.volRow{display:flex;align-items:center;gap:6px}
+.volRow .volLabel{font-size:11px;min-width:20px;text-align:center}
+#bgmSlider input[type=range]{flex:1;padding:0;border:0;background:transparent;accent-color:#3fae4a;cursor:pointer;margin:0}
+.volRow .volPct{font-size:10px;color:#9bd3a1;min-width:28px;text-align:right}
+#fs[hidden]{display:none}
+#cfg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,12,8,.95);color:#eee;z-index:7;font:14px system-ui,sans-serif}
+#cfg.arm{background:rgba(8,12,8,.3)}
+#cfg.arm .cbox{background:rgba(8,12,8,.6);border-radius:12px}
+#cfg .cbox{width:min(96vw,880px);max-height:100%;overflow:auto;padding:14px;box-sizing:border-box}
+#cfg h1{margin:0 0 14px;font-size:20px;text-align:center}
+.cgrid{display:grid;grid-template-columns:1fr minmax(160px,320px) 1fr;gap:14px;align-items:center}
+.ccol{display:flex;flex-direction:column;gap:14px}
+.slot{display:flex;flex-direction:column;gap:4px;text-align:left;min-height:104px;padding:10px 12px;border-radius:8px;border:2px solid #3fae4a;background:#1b2a1b;color:#eee;font:inherit;cursor:pointer}
+.slot small{color:#9bd3a1}
+.slot b{font-size:16px}
+.slot span{font-size:12px;color:#c4d3c4}
+.slot.empty{border-style:dashed;background:#121c12}
+.slot.empty b{color:#8fa38f}
+#cfgMech{aspect-ratio:1;border:2px dashed #3fae4a;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#0f1a0f;overflow:hidden}
+#cfgMech img{display:none;max-width:100%;max-height:100%}
+#cfgMech canvas{width:80%;height:80%}
+#cfgOk{display:block;margin:12px auto 0;font:inherit;padding:9px 28px;border-radius:6px;border:1px solid #3fae4a;background:#2a4d2a;color:#eee;cursor:pointer}
+#pick{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:8;font:14px system-ui,sans-serif;color:#eee}
+#pick .pbox{width:min(92vw,420px);max-height:86%;overflow:auto;background:#1b2a1b;border:2px solid #3fae4a;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#pick button{font:inherit;text-align:left;padding:8px 10px;border-radius:6px;border:1px solid #3fae4a;background:#0f1a0f;color:#eee;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+#pick button span{font-size:12px;color:#c4d3c4}
+#pick button em{font-size:12px;color:#ffd23f;font-style:normal}
+#cfgControls{margin:14px 0 0;border-top:1px solid #3fae4a;padding-top:10px}
+#cfgControls summary{cursor:pointer;font-weight:bold;color:#9bd3a1;padding:6px 0;list-style:none}
+#cfgControls summary::-webkit-details-marker{display:none}
+#cfgControls summary::before{content:'▸ ';color:#ffd23f}
+#cfgControls[open] summary::before{content:'▾ '}
+#ctrlList{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+@media (max-width:560px){#ctrlList{grid-template-columns:1fr}}
+.ctrlRow{display:flex;align-items:center;gap:8px;padding:5px 8px;background:#0f1a0f;border-radius:4px;border:1px solid #253a25}
+.ctrlRow label{flex:1;font-size:12px;color:#c4d3c4}
+.ctrlRow button{min-width:72px;padding:5px 8px;font:inherit;font-size:12px;border-radius:4px;border:1px solid #3fae4a;background:#1b2a1b;color:#eee;cursor:pointer}
+.ctrlRow button.capturing{background:#ffd23f;color:#000;border-color:#fff;animation:pulse .8s infinite alternate}
+@keyframes pulse{from{box-shadow:0 0 0 0 rgba(255,210,63,.7)}to{box-shadow:0 0 0 6px rgba(255,210,63,0)}}
+#ctrlReset{margin-top:6px;padding:6px 14px;border-radius:6px;border:1px solid #3fae4a;background:#2a4d2a;color:#eee;cursor:pointer;font:inherit}
+#titleLogo{font-size:3.2rem;font-weight:900;font-style:italic;letter-spacing:0.04em;text-align:center;margin:25px 0;padding:5px 0;text-transform:uppercase;-webkit-text-stroke:1px #000;display:inline-block;width:100%;transform:scaleX(2.6) scaleY(2);transform-origin:center;}
+@media (max-width:560px){.cgrid{grid-template-columns:1fr 1fr}#cfgMech{grid-column:1/3;grid-row:1;width:100%;max-width:240px;justify-self:center}}
+#bCfgLoading{position:fixed;top:calc(20px + env(safe-area-inset-top,0px));left:20px;z-index:6;display:none;padding:10px 15px;border-radius:8px;border:1px solid #3fae4a;background:rgba(15,26,15,.85);color:#eee;font:bold 14px system-ui,sans-serif;cursor:pointer}
+html,body{overscroll-behavior:none;touch-action:manipulation}
+#rot{display:none;position:fixed;top:0;left:0;right:0;z-index:20;padding:6px 10px;background:rgba(255,210,63,.95);color:#000;font:bold 14px system-ui,sans-serif;text-align:center;pointer-events:none}
+@media (pointer:coarse) and (orientation:portrait) and (max-width:520px){#rot{display:block}}
+@media (pointer:coarse){
+ #lobby{align-items:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch}
+ #lobby .box{margin:8px auto}
+ #lobby input,#lobby select,#lobby button{font-size:16px;min-height:44px}
+ #titleLogo{transform:scaleX(1.5) scaleY(1.2);margin:6px 0;font-size:2.2rem}
+ #fs{width:44px;height:44px}
+ #bgmToggle{width:44px;height:44px;top:calc(60px + env(safe-area-inset-top,0px))}
+ #bgmSlider{top:calc(60px + env(safe-area-inset-top,0px));right:60px}
+ #cfgOk{padding:12px 36px;font-size:16px}
+ #bCfgLoading{padding:12px 16px;font-size:16px}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="rot">Ruota lo smartphone in orizzontale per giocare meglio</div>
+<button id="bgmToggle" title="Volume audio">🔊</button>
+<div id="bgmSlider" title="Volume">
+    <div class="volRow">
+        <span class="volLabel">🎵</span>
+        <input id="musicRange" type="range" min="0" max="100" step="1" value="100">
+        <span id="musicPct" class="volPct">100%</span>
+    </div>
+    <div class="volRow">
+        <span class="volLabel">🔊</span>
+        <input id="sfxRange" type="range" min="0" max="100" step="1" value="100">
+        <span id="sfxPct" class="volPct">100%</span>
+    </div>
+</div>
+<button id="bCfgLoading">⚙️ Configura AirGrunt    ( R )</button>
+<div id="lobby">
+    <div class="box">
+        <h1 id="titleLogo">AIRGRUNT</h1><input id="lobName" maxlength="12" placeholder="Nome pilota" value="Pilota"
+ autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+ data-lpignore="true" data-form-type="other" name="pilot-name-no-autofill">
+<div class="row" id="lobCols"></div>
+<div class="row"><label for="lobMode" style="flex:none;align-self:center">Modalità</label><select id="lobMode"><option value="0">Missioni (cooperativa)</option><option value="1">Deathmatch</option></select></div>
+<div class="row"><label for="lobDiff" style="flex:none;align-self:center">Difficoltà: <b id="lobDiffV">1</b></label><input id="lobDiff" type="range" min="1" max="10" step="1" value="1"></div>
+<div class="row"><label for="lobProfile" style="flex:none;align-self:center">Mappa: <b id="lobProfileV">Casuale</b></label><input id="lobProfile" type="range" min="0" max="7" step="1" value="0"></div>
+<div class="row"><label for="lobWeather" style="flex:none;align-self:center">Meteo</label><select id="lobWeather"><option value="-1" selected>Casuale</option><option value="0">Sereno</option><option value="1">Pioggia</option><option value="2">Neve</option><option value="3">Tempesta di sabbia</option></select></div>
+<div class="row" id="lobMisRow"><label for="lobMis" style="flex:none;align-self:center">Missione</label><select id="lobMis"><option value="0">Casuale</option><option value="1">Scorta convoglio</option><option value="2">Estrazione VIP</option><option value="3">Sabotaggio</option><option value="4">Caccia al bersaglio</option><option value="5">Conquista avamposto</option><option value="6">Sabotaggio nucleare</option><option value="7">Ruba la nave spaziale</option><option value="8">Guardia di sicurezza</option><option value="9">Difesa della base</option><option value="10">Ricerca e recupero</option><option value="-1">Sterminio (classica)</option></select></div>
+<div class="row"><button id="bSolo"><span style="display: inline-block; transform: scale(1.8); transform-origin: center; margin-right: 10px;">👤</span>GIOCA OFFLINE</button></div>
+<div class="row"><button id="bHost"><span style="display: inline-block; transform: scale(1.8); transform-origin: center; margin-right: 10px;">📡</span>CREA PARTITA ONLINE</button></div>
+<div class="row"><input id="lobCode" maxlength="4" placeholder="Codice"
+ autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+ data-lpignore="true" data-form-type="other"><button id="bJoin">Entra</button></div>
+<div id="lobSt"></div></div></div>
+<div id="cfg"><div class="cbox"><h1>Configura AirGrunt</h1>
+<div class="cgrid"><div class="ccol" id="cfgL"></div>
+<div id="cfgMech"><img id="cfgImg" alt="Mech"><canvas id="cfgCv" width="260" height="260"></canvas></div>
+<div class="ccol" id="cfgR"></div></div><details id="cfgControls"><summary>Controlli (rimappa tastiera e mouse)</summary>
+<div id="ctrlList"></div>
+<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+<button id="ctrlReset" type="button" style="margin-top:0">↺ Ripristina default</button>
+<button id="ctrlModeToggle" type="button" style="margin-top:0">Movimento Grunt: Assoluto</button>
+</div>
+</details>
+<button id="cfgOk" type="button">Conferma</button></div></div>
+<div id="pick"><div class="pbox"><div id="pickList" style="display:contents"></div><button id="pickX" type="button">Annulla</button></div></div>
+<script>
+// Carica i file .js del gioco con un parametro sempre diverso: il browser non usa mai la copia in cache.
+// Ordine di caricamento: dati → utilità → mondo → mappa → effetti → armi → AI → regole → rete → disegno → gioco.
+// Caricamento sincrono. Suoni e immagini restano fuori; peerjs.min.js è una libreria e resta in cache.
+(function(){
+  var v = Date.now();
+  ['peerjs.min.js','AGconf.js','AGutil.js','AGworld.js','AGsites.js','AGmap.js','AGfx.js','AGweapons.js','AGai.js','AGmission.js','AGnet.js','AGdecor.js','AGprops.js','AGbake.js','AGterrain.js','AGrender.js','AGgame.js'].forEach(function(f){
+    document.write('<scr'+'ipt src="'+f+(f==='peerjs.min.js' ? '' : '?v='+v)+'"></scr'+'ipt>');
+  });
+})();
+</script>
+</body>
+</html>
