@@ -1,0 +1,373 @@
+'use strict';
+/* AIRGRUNT · AGconf.js
+   Unica fonte dei valori di gioco: mondo, armi, nemici, upgrade, difficoltà, densità delle mappe, colori.
+   Le armi sono definite UNA volta sola: giocatori e AI usano queste stesse armi, senza modifiche. */
+const EXTRA_ICE=[   // stesso TURN usato da DawnlorD (dnet.js)
+ {urls:'turn:global.relay.metered.ca:80',username:'0a099e5d0bdc770566e1b8be',credential:'/7ZvcHP2v8O7nit7'},
+ {urls:'turn:global.relay.metered.ca:80?transport=tcp',username:'0a099e5d0bdc770566e1b8be',credential:'/7ZvcHP2v8O7nit7'},
+ {urls:'turn:global.relay.metered.ca:443',username:'0a099e5d0bdc770566e1b8be',credential:'/7ZvcHP2v8O7nit7'},
+ {urls:'turns:global.relay.metered.ca:443',username:'0a099e5d0bdc770566e1b8be',credential:'/7ZvcHP2v8O7nit7'}];
+const VERSION='AIRGRUNT 1.3',PROTO=6,PEER_PREFIX='airgrunt-',
+ PEER_OPTS={debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'},...EXTRA_ICE],iceCandidatePoolSize:10,iceTransportPolicy:'all'}};
+const NET_LOAD_GRACE=99000;   // ms di tolleranza dopo un 'init' remoto prima di considerare un client "fuori sync"
+// ---- mondo ----
+const WW=6400,WH=6400,SEA=WW-440;       // area di gioco quadrata · SEA = distanza media della costa dal lato opposto al mare (il lato lo sceglie il seed: SIDE in AGworld.js)
+const START=[200,200],EXT=[260,260];    // partenza dei giocatori e punto di estrazione (genMap li sposta nell'angolo scelto dal seed)
+// ---- base di partenza: uno dei 4 angoli (k: 0 alto-sx, 1 alto-dx, 2 basso-dx, 3 basso-sx) ----
+// coordinate locali (u,v): l'angolo è (0,0), l'interno della mappa è verso u,v positivi
+const BASE={k:0,xr:WW,ox:0,oy:0};                // k: angolo di partenza (mai sul lato del mare) · xr: ascissa del lato destro
+const BASE_W=640,BASE_H=620;           // piazzale u × v, centrato in (330,330)
+const baseAng=a=>a+BASE.k*Math.PI/2;
+function baseXY(u,v){const o=BASE.ox||0,q=BASE.oy||0;switch(BASE.k){case 1:return[BASE.xr-v+o,u+q];case 2:return[BASE.xr-u+o,WH-v+q];case 3:return[v+o,WH-u+q];default:return[u+o,v+q]}}
+function baseLoc(x,y){x-=BASE.ox||0;y-=BASE.oy||0;switch(BASE.k){case 1:return[y,BASE.xr-x];case 2:return[BASE.xr-x,WH-y];case 3:return[WH-y,x];default:return[x,y]}}
+const inBase=(x,y,mg)=>{const l=baseLoc(x,y);return l[0]>-mg&&l[0]<BASE_W+20+mg&&l[1]>-mg&&l[1]<BASE_H+20+mg};
+const TC=40;                            // cella della griglia di terreno (quota, acqua)
+const GW=WW/TC,GH=WH/TC;
+// ---- telecamera ----
+const CAM={zoom:1.3,ref:1195.48,far:.65,edge:20,pan:400,margin:70};
+const HUD_SCALE=.75;
+// ---- armi: dmg per colpo (per tick per il lanciafiamme), cd = secondi tra due colpi, range in px, mag = caricatore, reload in s ----
+const W_MG=0,W_CAN=1,W_FLM=2,W_RKT=3,W_SHG=4,W_NONE=5;
+const WEAPONS=[
+ {n:'Mitraglia  ',dmg:12,cd:.06,spread:.09,speed:760,range:540,mag:50,reload:2,pellets:1,camZ:1,sfx:'sfx/sfx-laser.mp3',vol:.5},
+ {n:'Cannone  ',dmg:80,cd:1,spread:.01,speed:1800,range:1620,mag:1,reload:4,pellets:1,camZ:CAM.far,pierce:1,sfx:'sfx/shotgun.mp3',vol:1},
+ {n:'Lanciafiamme  ',dmg:8,cd:.04,spread:0,speed:1,range:240,mag:150,reload:12,pellets:0,camZ:1,flame:1,arc:.5,sfx:'sfx/sfx-airdrop.mp3',vol:.25,sg:120},
+ {n:'Lanciarazzi  ',dmg:90,cd:0.2,spread:.01,speed:400,range:700,mag:4,reload:12,pellets:1,camZ:.8,ex:90,exIn:70,exMin:59/90,exSfx:'sfx/sfx-boom.mp3',sfx:'sfx/sfx-airdrop.mp3',vol:.5},   // a fasce: danno pieno fino a exIn px, poi dmg×exMin (49) fino al bordo · le eredita anche l'Esplosivo
+ {n:'Shotgun  ',dmg:16,cd:.1,spread:.175,speed:1140,range:389,mag:2,reload:2,pellets:8,camZ:1,sfx:'sfx/shotgun.mp3',vol:.6},
+ {n:'Disarmato  ',dmg:0,cd:1,spread:0,speed:0,range:540,mag:0,reload:0,pellets:0,camZ:1}];
+// armi montate sui VEICOLI dei giocatori (indici dopo W_NONE: non compaiono fra le armi del mech; veh:1 = solo a bordo del mezzo giusto)
+const W_VMG=6,W_VCAN=7,W_VJMG=8,W_VJMS=9,W_VROT=10,W_VSWM=11;
+WEAPONS.push(
+ {n:'Mitragliera pesante  ',dmg:20,cd:.09,spread:.06,speed:900,range:640,mag:120,reload:3.5,pellets:1,camZ:.9,sfx:'sfx/sfx-laser.mp3',vol:.5,veh:1},          // APC
+ {n:'Cannone del carro  ',dmg:150,cd:1.6,spread:.005,speed:1500,range:1150,mag:1,reload:2.2,pellets:1,camZ:.75,ex:75,sfx:'sfx/shotgun.mp3',vol:1,veh:1},     // carro armato: granata esplosiva
+ {n:'Cannoncino del jet  ',dmg:16,cd:.05,spread:.07,speed:1100,range:700,mag:150,reload:3,pellets:1,camZ:1,sfx:'sfx/sfx-laser.mp3',vol:.45,veh:1},          // jet
+ {n:'Missili aria-terra  ',dmg:110,cd:.3,spread:.02,speed:720,range:900,mag:6,reload:7,pellets:1,camZ:1,ex:85,sfx:'sfx/sfx-airdrop.mp3',vol:.5,veh:1},       // jet
+ {n:'Cannone rotante  ',dmg:24,cd:.055,spread:.1,speed:950,range:660,mag:240,reload:5,pellets:1,camZ:.9,sfx:'sfx/sfx-laser.mp3',vol:.5,veh:1},              // Colosso
+ {n:'Missili a sciame  ',dmg:80,cd:.14,spread:.12,speed:560,range:820,mag:12,reload:9,pellets:1,camZ:.85,ex:70,sfx:'sfx/sfx-airdrop.mp3',vol:.45,veh:1});    // Colosso
+// armi "abilità" del Grunt: 1 colpo, la ricarica fa da tempo di attesa (Ricarica rapida non la accorcia) · abil = come si lancia (AGgame.js: abilShot)
+const W_GRN=12,W_NUK=13;
+WEAPONS.push(
+ {n:'Esplosivo  ',dmg:WEAPONS[W_RKT].dmg*5,cd:.5,spread:0,speed:450,range:200,mag:1,reload:10,pellets:0,camZ:1,ex:WEAPONS[W_RKT].ex,abil:'grn',
+  get d(){return `   Lancia un esplosivo entro ${this.range}px: 5× il danno di un missile. Esplode dopo 10s o 0,5s dopo che un nemico è nel raggio. Ricarica ${this.reload}s`},
+  ic:'<rect x="-6.5" y="3.5" width="13" height="5.5" rx="0.8" fill="#ff3b3b"/><rect x="-2" y="1.6" width="4" height="2" rx="0.4" fill="#ff3b3b"/><path d="M-3.4,0.6 L-6.0,0.3 M-2.2,-0.5 L-7.6,-4.2 M-1.5,-2.0 L-2.6,-4.3 M0,-1.5 L0,-8.8 M1.6,-1.9 L3.3,-5.4 M2.3,-0.5 L6.4,-3.3 M3.4,0.6 L7.0,0.2" stroke="#ff3b3b" stroke-width="1.3" stroke-linecap="round"/>'},
+ {n:'Granata nucleare  ',dmg:5000,cd:1,spread:0,speed:0,range:WEAPONS[W_MG].range,mag:1,reload:180,pellets:0,camZ:1,ex:300,abil:'nuk',
+  get d(){return `   Gittata ${this.range}px, sorvola gli ostacoli: dopo 3s esplode con raggio ${this.ex}px. Danno estremo. Ricarica ${this.reload}s`},
+  ic:'<path d="M-2.2,-2 Q-1.6,3 -3,6.5 L3,6.5 Q1.6,3 2.2,-2 Z" fill="#b81c1c"/><ellipse cx="0" cy="7.3" rx="8" ry="2" fill="#b81c1c"/><ellipse cx="0" cy="1.5" rx="4" ry="1.1" fill="#e03131"/><g fill="#e03131"><circle cx="-4.5" cy="-4" r="3.5"/><circle cx="0" cy="-6" r="4"/><circle cx="4.5" cy="-4" r="3.5"/><ellipse cx="0" cy="-2.2" rx="7.5" ry="2.4"/></g><circle cx="-1.5" cy="-7" r="1.5" fill="#ff7a7a"/>'});
+// Missili guidati: proiettile esplosivo che curva verso il bersaglio agganciato allo sparo (b.tg) · turn = virata (rad/s) · lock = semi-cono di aggancio (rad)
+const W_HOM=14;
+WEAPONS.push({n:'Missili guidati  ',dmg:49,cd:.3,spread:.04,speed:420,range:600,mag:8,reload:12,pellets:1,camZ:.85,ex:30,exMin:1,hom:1,turn:3.5,lock:.45,sfx:'sfx/sfx-airdrop.mp3',vol:.5,   // exMin 1: danno uguale in tutto il raggio
+ get d(){return `   Missili che curvano da soli verso il bersaglio agganciato: il nemico visibile più vicino al mirino, entro ${Math.round(this.lock*360/Math.PI)}° davanti a te. Danno ${this.dmg}, esplosione ${this.ex}px, gittata ${this.range}, caricatore ${this.mag}, ricarica ${this.reload}s`},
+ ic:'<path d="M-8,6 Q-2,6 2,-1" fill="none" stroke="#ff3b3b" stroke-width="1.4" stroke-dasharray="2 1.6"/><path d="M1,-1 L6,-7 L8.5,-4.5 L3,1.5 Z" fill="#ff3b3b"/><path d="M1,-1 L-.5,-3.5 M3,1.5 L5.5,3" stroke="#ff3b3b" stroke-width="1.3" stroke-linecap="round"/><circle cx="7" cy="-8" r="1.4" fill="none" stroke="#ff3b3b" stroke-width="1"/>'});
+// Cannone della dropship guidabile (veicolo dei giocatori): 1 colpo ogni 0,3 s, 300 colpi, ricarica 6 s · veh:1 = solo a bordo del mezzo
+const W_VDS=15;
+WEAPONS.push({n:'Cannone della dropship  ',dmg:40,cd:.3,spread:.02,speed:1500,range:900,mag:300,reload:6,pellets:1,camZ:.9,sfx:'sfx/shotgun.mp3',vol:.6,veh:1});
+// ---- scala delle gittate: RANGE_K moltiplica la gittata di tutte le armi (anche veicoli e abilità); 1 = valori originali ----
+// tutte le distanze legate alle gittate (ingaggio dei nemici, vista delle unità senza arma, aggiramenti, avvistamenti) seguono RANGE_K da sole: vedi le costanti qui sotto e UT
+const RANGE_K=.75;for(const w of WEAPONS)w.range=Math.round(w.range*RANGE_K);
+const RK=d=>Math.round(d*RANGE_K);                               // distanza pensata per le gittate originali → distanza attuale
+const HOLD_MIN=RK(150),HOLD_DEF=RK(400);                         // distanza di ingaggio con un'arma diversa da quella di serie: minima · di riserva
+const FLANK_OFF=RK(160),FLANK_OK=RK(240);                        // aggiramento: quanto oltre la distanza di ingaggio si punta al fianco · a che distanza dal punto l'aggiramento è riuscito
+const SIGHT_NOW=RK(900),SPOT_AIR=RK(1300);                       // vista delle unità senza arma (swordman, kamikaze) · da quanto lontano un giocatore in Air avvista il VIP (caccia al VIP)
+const SPAWN_K=Math.max(1,RANGE_K);                               // ondate: con gittate più lunghe nascono più lontano (sempre fuori dalla vista), con gittate più corte restano dove sono
+const EX_MIN=20/90;                      // danno ai bordi di un'esplosione, in frazione del danno al centro// --- scala e raggi di collisione ---
+// MECH_SCALE: scala visiva e di hitbox del mech Grunt (giocatori) e del Mech nemico (k=1).
+// PR_GRUNT / PR_AIR: raggio di HITBOX del giocatore a terra / in Air (colpi, mischia, esplosioni).
+// ER_MECH: raggio di collisione del Mech nemico (k=1), coerente col disegno ridotto.
+// PR_PUSH: ingombro FISICO del Grunt contro edifici/muri (push() in AGworld.js).
+// PR_PUSH_DASH: ingombro durante lo scatto (dash → si passa nei vicoli stretti).
+// NOTA: le costanti vanno PRIMA di UT perché la riga del Mech (r:22*MECH_SCALE) le legge.
+const MECH_SCALE=0.75, PR_GRUNT=18*MECH_SCALE, PR_AIR=16, ER_MECH=22*MECH_SCALE;
+const PR_PUSH=12, PR_PUSH_DASH=PR_PUSH*0.5;   // 12 px a riposo → 6 px durante il dash
+// ---- tipi di nemico (k): hp, arma, raggio d'impatto, velocità, distanza di tiro, raffica (colpi) e pausa (s) ----
+const GND_SPD=.7;   // moltiplicatore della velocità di TUTTE le unità di terra non giocanti (1 = velocità originale): nemici (spd/fast di UT qui sotto e velocità fisse in AGsim.js: pattuglia, schivata)
+                    // e alleati: VIP e wingman (VIP_V), convoglio (CONV_V), furgone (SEC_VAN_V). Il Grunt del giocatore ha la sua: GRUNT_V
+const UT=[
+ {n:'Torretta',hp:240,w:W_MG,r:26,pr:26,fixed:1,rm:3,rate:.5,inf:1,lead:.5,err:1,arm:.3},
+ {n:'Mech',hp:90,w:W_MG,r:22*MECH_SCALE,pr:18,spd:120,fast:150,hold:320,burst:[3,5],pause:[1,1.8],lead:.5,err:1,arm:.3},
+ {n:'Jet',hp:80,w:W_MG,r:20,pr:20,fly:1,spd:110,hold:380,burst:[3,4],pause:[1.2,2.2],lead:.5,err:1,arm:.25},
+ {n:'Kamikaze',hp:40,w:-1,r:18,pr:18,fly:1,spd:230,arm:.25,boom:{r:90,dmg:45,trig:40}},
+ {n:'Cecchino',hp:90,w:W_CAN,r:20,pr:20,spd:70,hold:600,burst:[1,1],pause:[.3,.8],lead:1,err:.6,arm:.3,bsp:.7,rlm:.7,dmg:50},   // err raddoppiato (era .3)
+ {n:'Carro pesante',hp:360,w:W_RKT,r:30,pr:26,spd:50,hold:420,burst:[2,3],pause:[1.5,2.5],lead:.5,err:1,arm:1},
+ {n:'Bersaglio d\u2019\u00e9lite',hp:900,w:W_MG,w2:W_SHG,r:20,pr:15,spd:130,hold:360,burst:[4,6],pause:[.5,1],lead:.5,err:1.5,arm:1},
+ {n:'Dirigibile',hp:360,w:W_SHG,w2:W_MG,w3:W_RKT,r:36,pr:26,fly:1,spd:50,hold:320,burst:[4,6],pause:[.8,1.4],lead:.5,err:1,arm:1},
+ {n:'Swordman',hp:90,w:-1,r:22*MECH_SCALE,pr:18,spd:140,hold:45,arm:.5},   // mischia; fuori portata della spada spara colpi singoli di mitraglia (swordGun, SWD_GUN_CD); hold = distanza a cui si ferma (dentro la portata della spada)
+ {n:'APC',hp:240,w:W_MG,r:20,pr:18,spd:170,hold:320,burst:[3,5],pause:[1,1.8],lead:.5,err:1,arm:.3},   // veicolo leggero armato: vita da torretta, mitraglia da mech, più grande e più veloce del mech
+ {n:'Nave da guerra',hp:720,w:W_MG,w3:W_RKT,r:40,pr:40,fixed:1,ship:1,hold:9999,burst:[4,6],pause:[.8,1.4],lead:.5,err:1,arm:1,arF:12},   // immobile, è una nave della mappa: corazza fissa 12, vita doppia del carro, torrette del dirigibile (mitraglia + razzi)
+ {n:'Infiltrato civile',hp:20,w:W_MG,r:14,pr:10,spd:90,hold:320,burst:[3,5],pause:[1,1.8],lead:.5,err:1,arm:0},
+ {n:'Guardia',hp:20,w:W_MG,r:14,pr:10,spd:90,hold:320,burst:[3,5],pause:[1,1.8],lead:.5,err:1,arm:0},
+ {n:'Poliziotto',hp:30,w:W_MG,r:14,pr:10,spd:100,hold:300,burst:[3,5],pause:[1,1.8],lead:.5,err:1,arm:0}];   // esce dalla centrale di polizia danneggiata: attacca tutti
+for(const T of UT)if(!T.fly){if(T.spd)T.spd*=GND_SPD;if(T.fast)T.fast*=GND_SPD}   // nemici di terra più lenti (Jet, Kamikaze e Dirigibile volano: restano com'erano)
+const UK_TUR=0,UK_MECH=1,UK_JET=2,UK_KAMI=3,UK_SNIP=4,UK_TANK=5,UK_ELITE=6;   // tipi di nemico (k = indice in UT): usare sempre i nomi, mai i numeri
+const UK_SWD=8;                          // Swordman: mech da mischia (spada)
+const UK_APC=9;                          // APC: veicolo leggero armato (torretta che ruota separata dallo scafo)
+const UK_SHIP=10;                        // nave da guerra: il corpo è l'ostacolo 'ship' della mappa, l'unità ne comanda solo le torrette
+const UK_HUM=11,UK_INF=11;               // da questo indice in poi: unità "omino" (infiltrati k=11, guardie k=12, poliziotti k=13) · UK_INF = infiltrato civile
+const UK_GRD=12;                         // guardia (omino travestito, classe militare)
+const UK_POL=13;                         // poliziotto: omino armato (come i militari, testa blu) che attacca nemici E giocatori
+const UK_BLIMP=7;                        // Dirigibile: nemico volante con torretta indipendente dallo scafo (come il carro pesante, k=5)
+const hasTur=k=>k===UK_TANK||k===UK_BLIMP||k===UK_APC;     // tipi con la torretta che ruota separata dallo scafo (u.thr)
+const has3=k=>k===UK_BLIMP||k===UK_SHIP;             // tipi con 3 torrette indipendenti (thr, thr2, thr3): dirigibile e nave da guerra
+// unità AI testabili in Arena Duel (stessa unità con armi diverse = voci separate)
+const DUEL_UNITS=[
+ {n:'Torretta (Mitraglia)',          k:UK_TUR,        w:W_MG},
+ {n:'Torretta (Lanciafiamme)',       k:UK_TUR,        w:W_FLM},
+ {n:'Torretta (Shotgun)',            k:UK_TUR,        w:W_SHG},
+ {n:'Torretta (Cannone)',            k:UK_TUR,        w:W_CAN},
+ {n:'Mech (Mitraglia)',              k:UK_MECH,        w:W_MG},
+ {n:'Mech (Lanciafiamme)',           k:UK_MECH,        w:W_FLM},
+ {n:'Mech (Shotgun)',                k:UK_MECH,        w:W_SHG},
+ {n:'Mech (Cannone)',                k:UK_MECH,        w:W_CAN},
+ {n:'Jet (Mitraglia)',               k:UK_JET,        w:W_MG},
+ {n:'Jet (Missili guidati)',         k:UK_JET,        w:W_HOM},
+ {n:'Kamikaze',                      k:UK_KAMI,        w:-1},
+ {n:'Cecchino (Cannone)',            k:UK_SNIP,        w:W_CAN},
+ {n:'Cecchino (Lanciafiamme)',       k:UK_SNIP,        w:W_FLM},
+ {n:'Cecchino (Shotgun)',            k:UK_SNIP,        w:W_SHG},
+ {n:'Carro pesante (Cannone)',       k:UK_TANK,        w:W_CAN, tv:0},
+ {n:'Carro pesante (Lanciarazzi)',   k:UK_TANK,        w:W_RKT, tv:1},
+ {n:'Bersaglio d\u2019\u00e9lite (Mitraglia+Shg)', k:UK_ELITE, w:W_MG},
+ {n:'Bersaglio d\u2019\u00e9lite (Cannone+Shg)',   k:UK_ELITE, w:W_CAN},
+ {n:'Dirigibile',                    k:UK_BLIMP, w:W_SHG},
+ {n:'Swordman',                      k:UK_SWD,   w:-1},
+ {n:'APC (Mitraglia)',               k:UK_APC,   w:W_MG},
+ {n:'APC (Missili guidati)',         k:UK_APC,   w:W_HOM},
+ {n:'Infiltrato civile (Mitraglia)', k:UK_HUM,   w:W_MG},
+ {n:'Guardia (Mitraglia)',           k:UK_GRD,   w:W_MG},
+ {n:'Poliziotto (Mitraglia)',        k:UK_POL,   w:W_MG}
+];
+UT.forEach(u=>{if(u.hold&&u.w>=0&&!u.fixed)u.hold=Math.min(RK(u.hold),Math.round(WEAPONS[u.w].range*(u.rm||1)*.9));   // distanza di ingaggio: segue RANGE_K e resta sempre dentro la gittata dell'arma (anche se se ne cambia una sola)
+ u.sight=u.w>=0?WEAPONS[u.w].range*(u.rm||1)*1.2:SIGHT_NOW});
+const WING={burst:[15,30],pause:[.15,.4],lead:1,err:.3};   // wingman: raffiche lunghe, pause brevi, lead sempre attivo, errore di mira ridotto (gradi)
+const ARM_MIN=4,ARM_MAX=12;             // corazza dei nemici: ogni danno subito cala di tanti punti (minimo 1)
+const KAMI_ER=UT[UK_KAMI].boom.r;
+
+// quantità di nemici (fisse: la difficoltà NON le cambia)
+const N_TUR=16,N_SQUAD=9,N_FLY=2,N_RUSH=6,N_SNIP=4,N_TANK=3,N_SWD=5,N_APC=4;
+const blimpProb=d=>Math.min(1,0.25+(clamp(d|0,1,10)-1)*0.75/8);   // probabilità di comparsa del dirigibile: 25% a diff 1 → 100% da diff 9 in su
+const N_INF=10,N_GRD=8;                  // infiltrati civili e guardie (travestiti da omini)
+const N_CIV_P=70,N_CIV_V=22,CIV_PEN=1;   // civili: omini sulle strade, veicoli, kill tolte per ogni civile ucciso
+const N_CIV_B=90,N_CIV_W=110,CIV_GRP=[2,5];   // omini intorno agli edifici; omini sparsi ovunque sulla mappa, a gruppetti di 2-5
+const CIV_SITE={c:1,n:1,a:1,i:2,k:2,y:2,p:2},CIV_SITE_N={1:[6,10],2:[8,14]};   // tipo di sito → classe di omini: 1 militari (caserme, silos, aeroporto), 2 operai (industrie, centrale, cantiere, porto); [min,max] omini fissi per sito
+const N_ARM=2,ARM_R=80;                  // armerie: quante, distanza massima dal muro per usarle
+// ---- edifici speciali FACOLTATIVI (oltre alle armerie): da 0 a SB_MAX per mappa, al massimo uno per tipo, scelti dal seed ----
+// c = colore del tratteggio · n = nome · t = durata del potenziamento (s) · up = upgrade di cui danno l'effetto e l'icona · e = testo dell'effetto
+const SB_TYPES={
+ pol:{n:'Centrale di polizia',c:'#3b82f6'},
+ pri:{n:'Prigione',c:'#8b5a2b'},
+ hos:{n:'Ospedale',c:'#ff8c1a',t:60,up:'regen',e:'Rigenerazione'},
+ off:{n:'Officina',c:'#9aa3ab',t:60,up:'gdr',e:'Corazza Grunt'},
+ rad:{n:'Radar',c:'#a855f7',t:30,up:'radar',e:'Nemici visibili nella nebbia'},
+ gen:{n:'Generatore',c:'#ffffff',t:60,up:'dash',e:'Energia'}};
+const SB_MAX=3,SB_BUFF=['hos','off','rad','gen'];   // SB_BUFF: edifici che si usano col tasto R (danno un potenziamento a tempo)
+const POL_N=12,POL_CD=30,POL_MAX=24,POL_LEASH=1500;  // poliziotti per ondata · secondi minimi fra due ondate · poliziotti vivi massimi · distanza massima dalla centrale dei loro bersagli
+const PRI_N=3;                                     // wingman liberati dalla prigione distrutta
+const SAFE_R=1700,ALERT_R=500,LOST_T=10,SEARCH_N=3,SEARCH_LEAD=1.5; // distanza minima dalla partenza, raggio di allarme, secondi di ricerca; punti da ispezionare e anticipo (s) lungo la direzione del bersaglio; finestra di "allerta ancora viva" (s) e moltiplicatore del tempo di reazione
+// ---- giocatore ----
+// ---- veicoli guidabili (AGveh.js: logica · AGart.js: disegno) ----
+// n nome · art disegno · civ tipo di CIV_VEH (veicoli civili: stesso disegno delle auto in strada) · hp vita del mezzo · ar corazza (toglie tanti punti a ogni colpo)
+// r raggio d'impatto (colpi, investimenti) · pr ingombro contro edifici e alberi · v velocità massima (px/s) · acc / brk accelerazione e frenata · turn sterzata (rad/s)
+// w armi montate (indici di WEAPONS; vuoto = mezzo disarmato: il pilota usa le armi del suo Grunt dal finestrino) · mz distanza della bocca da fuoco dal centro · cz zoom della telecamera
+// comandi (tutti come il jet): W accelera · A/D ruotano · S frena (a terra, da fermi, S fa retromarcia lenta)
+// seats: posti per i PASSEGGERI (oltre al guidatore). Il primo che sale guida; gli altri (solo alleati: in deathmatch nessuno sale sul mezzo di un altro) viaggiano e sparano con le armi del Grunt
+// heavy: mezzo pesante (non si investe, blocca chi lo urta) · track: cingolato, ruota sul posto · walk: cammina (ruota sul posto, guada l'acqua) · fly: vola · crush: abbatte gli alberi
+// hov: due modalità (dropship): a raso terra (veicolo di terra, sorvola l'acqua) o in quota (veicolo volante); si pilota come il Grunt, il tasto Grunt/Air cambia quota
+// dove compaiono e quanto sono rari (vehInit in AGveh.js; tutto dal seed, uguale per tutti i client):
+//   civili: wt = peso nella scelta del tipo (più alto = più comune); stanno sugli slab degli edifici di città e sulle strade dentro le città
+//   militari: at = siti ammessi {tipo di sito: raggio minimo del sito, 0 = qualunque} · p = probabilità di comparire in ogni sito ammesso · n = [min,max] esemplari se compare
+//   (tipi di sito: c base militare · n silos missilistici · a aeroporto · y cantiere spaziale)
+const VEH_T=[
+ {n:'Berlina',art:'civ',civ:'berlina',hp:140,ar:0,r:12,pr:10,v:330,acc:1.6,brk:3.2,turn:2.6,w:[],mz:10,cz:.9,wt:40,seats:4},
+ {n:'Sportiva',art:'civ',civ:'sportiva',hp:110,ar:0,r:12,pr:10,v:430,acc:1.9,brk:3.5,turn:2.8,w:[],mz:10,cz:.85,wt:12,seats:1},
+ {n:'Pickup',art:'civ',civ:'pickup',hp:200,ar:2,r:14,pr:11,v:300,acc:1.4,brk:3,turn:2.3,w:[],mz:10,cz:.9,wt:25,seats:4},
+ {n:'Furgone',art:'civ',civ:'furgone',hp:250,ar:2,r:14,pr:12,v:260,acc:1.2,brk:2.8,turn:2.1,w:[],mz:10,cz:.9,wt:20,seats:4},
+ {n:'Camioncino volante',art:'skytruck',civ:1,sky:1,hp:200,ar:2,r:15,pr:11,v:400,acc:1.5,brk:2.8,turn:2.2,fly:1,w:[],mz:16,cz:.9,wt:25,seats:4},
+ {n:'APC',art:'apc',hp:520,ar:8,r:20,pr:16,v:184,acc:1.2,brk:2.8,turn:2,heavy:1,w:[W_VMG],mz:24,cz:.9,at:{c:0,n:0},p:.45,cnt:[1,2],seats:7},
+ {n:'Carro armato',art:'tank',hp:900,ar:12,r:30,pr:24,v:67,rev:39,acc:.9,brk:2.5,turn:1.3,heavy:1,track:1,crush:1,w:[W_VCAN,W_VMG],mz:51,cz:.8,at:{c:0,n:0},p:.28,cnt:[1,1],seats:2},   // rev = velocità di retromarcia (senza rev: v × 0,35)
+ {n:'Jet',art:'jet',hp:400,ar:4,r:20,pr:16,v:760,acc:1.1,brk:2.2,turn:1.5,fly:1,w:[W_VJMG,W_VJMS],mz:22,cz:1,at:{a:0,y:0,c:600},p:.35,cnt:[1,2],seats:1},   // aeroporti, cantieri spaziali, grandi basi
+ {n:'Colosso',art:'walker',hp:1100,ar:12,r:32,pr:24,v:95,acc:1.4,brk:3,turn:1.6,heavy:1,walk:1,crush:1,w:[W_VROT,W_VSWM],mz:50,cz:.8,at:{c:0,n:0,y:600},p:.06,cnt:[1,1],seats:1},   // rarissimo: siti militari o cantiere spaziale grande
+ {n:'Dropship',art:'dropship',hp:700,ar:6,r:35,pr:28,v:210,va:420,acc:6,brk:6,turn:2,hov:1,sc:.5,w:[W_VDS],mz:45,cz:.9,at:{a:0,y:0,c:600},p:.25,cnt:[1,1],seats:7}];   // hov: vola a raso terra (veicolo di terra) o, col tasto Grunt/Air, in quota (veicolo volante) · si guida come il Grunt (WASD = direzione), v 210 = 200% di GRUNT_V · va = velocità in quota (420 = doppia) · sc = scala del disegno di drawDropship · poco più rara del jet
+const VEH_CIV_PER=18,VEH_CIV_MAX=16;      // veicoli civili: uno ogni tanti slab di città (più città = più auto), al massimo tanti per mappa
+// ---- macchine civili volanti (in fondo ad AGveh.js): scenografia, nessuna rete tranne la distruzione ----
+const SKY_MIN=4,SKY_PER=3,SKY_MAX=18,SKY_EDGE=320;   // quante: SKY_MIN + SKY_PER per città, al massimo SKY_MAX · SKY_EDGE = quanto fuori mappa iniziano e finiscono le rotte
+const SKY_DRAW=[10,16,24];                            // tetto di macchine disegnate per qualità (bassa, media, alta)
+const SKY_T=[{n:'Berlina volante',r:16,v:[150,220],wt:4},{n:'Taxi drone',r:15,v:[110,170],wt:3},{n:'Furgone volante',r:19,v:[100,150],wt:2},{n:'Sportiva volante',r:16,v:[230,320],wt:2}];   // r raggio d'impatto · v velocità [min,max] px/s · wt peso nella scelta
+const SKY_COLS=[['#d9dde3','#ffffff'],['#2a6fdb','#7fb0ff'],['#c0392b','#ff7a6a'],['#ffd23f','#fff0a0'],['#2a2a2a','#5a5a5a'],['#16a085','#6fe0c6']];   // [carrozzeria, dettagli]
+const VEH_USE_R=55;                       // distanza (dal bordo del mezzo) entro cui si può salire
+const VEH_RAM_DMG=50,VEH_RAM_V=60,VEH_RAM_CD=.7,VEH_RAM_PUSH=55;   // investimento: danno (ignora la corazza) · velocità minima · secondi prima di colpire di nuovo la stessa unità · spinta (px)
+const VEH_EJECT_DMG=25;                   // danno al pilota quando il suo mezzo esplode
+const VEH_REPAIR=4;
+const VEH_VIP_R=100,VEH_VIP_T=1,VEH_VIP_V=40;   // VIP: distanza (dal bordo del mezzo) entro cui sale · secondi accanto al mezzo prima di salire · velocità massima del mezzo perché il VIP salga                       // riparazione all'armeria: punti vita del mezzo al secondo (R a bordo, finché il mezzo resta vicino)
+const VEH_HUM=new Set([UK_MECH,UK_SNIP,UK_ELITE,UK_SWD,UK_INF,UK_GRD,UK_POL]);   // unità umanoidi che si possono investire: mech, cecchino, élite, swordman, infiltrati, guardie, poliziotti
+const VEH_HEAVY=new Set([UK_TUR,UK_TANK,UK_APC]);            // unità pesanti: torretta, carro pesante, APC (non si investono, bloccano il mezzo)
+const VEH_MIL_COL='#59633c';               // colore dei mezzi militari parcheggiati (guidati prendono il colore del pilota)
+// ---- mira automatica dei dispositivi touch (AUTO e aggancio vicino al dito), in tutte le modalità: bilancia mobile contro mouse ----
+const AIM_TURN=6,AIM_DELAY=.35,AIM_TOL=.08,AIM_SWITCH=.6;   // velocità di rotazione della mira (rad/s) · secondi da un bersaglio nuovo al primo colpo (AUTO) · scarto massimo (rad) fra mira e bersaglio per sparare (AUTO) · cambia bersaglio solo se il nuovo è più vicino di questa frazione
+const AIR_V=570,AIR_TURN=1.6,GRUNT_V=105;   // GRUNT_V = velocità del mech a terra (px/s; era 150, -30%). Lo scatto ha la sua: DASH_V
+const DASH_CD=2,DASH_T=.14,DASH_V=700;
+const MELEE_DMG=80,MELEE_R=70,MELEE_ARC=1.6,MELEE_CD=.2,MELEE_COST=.70;
+const PLASMA_ARC=.7;   // Plasmablade: arco del fendente al 70% di MELEE_ARC
+const SWD_DMG=.5,SWD_CD=.75;   // swordman: 50% del danno di mischia dei giocatori, un fendente ogni 0,75 s
+const SWD_GUN_CD=1;            // swordman fuori portata della spada: un colpo singolo di mitraglia ogni SWD_GUN_CD s
+const REGEN=1,WATER_SLOW=.25,HILL_SLOW=.75,ARC_DEG=61;
+const WX_SLOW=HILL_SLOW;   // chiazze di neve e pozzanghere (meteo): rallentano come la collina, giocatori e AI
+const ENEMY_AIM_ERR=1;                   // errore casuale di mira dell'AI (± gradi)
+// ---- difficoltà 1-10: cambia caserme, reazione e tempo di mira dell'AI ----
+const diffAimTime=(d,u)=>{const a=u&&u.sec?1.8:2.8;return a+(0.8-a)*(d-1)/9};   // secondi di mira visiva continua: nemici 2.8 → 0.8 · alleati (u.sec) 1.8 → 0.8 come prima
+const diffArmP=d=>.01+(.5-.01)*(d-1)/9;            // probabilità di corazza dei nemici "a caso" (UT.arm tra 0 e 1): 1% → 50%
+const diffAiSpread=d=>1+3.0*(10-d)/9;              // moltiplicatore dello spread delle armi dei nemici: ×4 → ×1
+const diffAiErr=d=>1+5.0*(10-d)/9;                 // moltiplicatore dell'errore di mira dei nemici: ×6 → ×1
+const AIM_CAP=2;                                   // tetto del contatore di mira: soglia + AIM_CAP secondi
+const diffAimDecay=d=>2+(.5-2)*(d-1)/9;            // quanto cala al secondo il contatore di mira quando il nemico non ti vede: 2 → 0,5
+const diffLeadMul=d=>1+(Math.random()*2-1)*.5*(diffAiErr(d)-1)/5;   // errore sull'anticipo (moltiplica la velocità stimata del bersaglio): ±50% a difficoltà 1 → esatto a difficoltà 10
+const diffTanks=d=>(d|0)+2;                        // massimo di carri armati iniziali: 3 a difficoltà 1, +1 per livello, 12 a difficoltà 10
+const diffBlimps=d=>d>=10?2:1;                     // dirigibili massimi: 1, 2 a difficoltà 10
+const diffBars=d=>Math.round((d-1)*6/9);          // caserme nemiche (0 → 6)
+// ---- caserme e missioni ----
+const BAR_MAX=6,BAR_T=120,BAR_SPAWN=9,BAR_HP=2;
+// nomi, trame e regole delle missioni: tutte in AGmis.js (registro e un blocco per missione) (MIS, MIS_NAMES, MISSION_STORY, MIS_N)
+
+// ---- profili di densità della mappa (slider "Mappa" della lobby: 0 = Casuale, scelto dal seed; 1..N = PROFILES[n-1]) ----
+// sites = [min,max] siti principali · roads = strade principali · city = quota di siti che sono città a griglia · cd = grandezza delle città
+// ports = porti massimi · minor = piccoli siti lungo le strade · fill = tessuto urbano di riempimento (0..1)
+// forest / rock = quota di terreno a bosco e a roccia · hill = colline · nat = alberi e rocce sparsi · lakes / rivers = [min,max]
+// dec = decorazioni artificiali (scene, barche, relitti: 0 = solo natura) · mix = peso di ogni tipo di sito
+//   c base militare · i industria · k centrale nucleare · y cantiere spaziale · n silos · a aeroporto · t città · p porto · f fattoria · v villa · q cava · s arena (al massimo una per mappa)
+const PROFILES=[
+ {n:'Metropoli',sites:[26,32],roads:[8,10],city:.6,cd:1.5,ports:2,minor:150,fill:1,forest:.05,rock:.04,hill:.5,nat:.3,lakes:[1,3],rivers:[1,3],dec:1.5,mix:{i:4,c:2,t:4,p:2,k:1,y:1,n:1,a:1,v:1,s:1.5}},
+ {n:'Urbana',sites:[14,18],roads:[5,6],city:.45,cd:1.2,ports:2,minor:70,fill:.5,forest:.12,rock:.07,hill:.7,nat:.6,lakes:[2,4],rivers:[2,3],dec:1.2,mix:{i:3,c:2,t:3,p:2,k:1,y:1,n:1,a:1,f:2,v:2,q:1,s:1.2}},
+ {n:'Media',sites:[8,11],roads:[3,4],city:.32,cd:1,ports:1,minor:36,fill:.2,forest:.2,rock:.1,hill:.85,nat:.9,lakes:[2,5],rivers:[2,4],dec:1,mix:{i:2,c:2,t:1,p:2,k:1,y:1,n:1,a:1,f:3,v:2,q:1,s:1}},
+ {n:'Rurale',sites:[5,7],roads:[2,2],city:.2,cd:.8,ports:1,minor:16,fill:0,forest:.28,rock:.13,hill:1,nat:1.2,lakes:[3,6],rivers:[2,4],dec:.6,mix:{c:1,i:1,p:1,k:1,y:1,n:1,a:1,f:5,v:3,q:2,s:.5}},
+ {n:'Selvaggia',sites:[4,4],roads:[1,1],city:0,cd:1.3,ports:1,minor:0,fill:0,forest:.4,rock:.17,hill:1,nat:1.6,lakes:[3,6],rivers:[3,5],dec:0,mix:{c:2,i:1,p:1,k:1,y:1,n:1,a:1,q:2}}];
+const CONV_V=70*GND_SPD,CONV_HP=500,VIP_HP=150,VIP_V=140*GND_SPD,VIP_T=3,EXT_R=220;
+// ---- missione 8: guardia di sicurezza ----
+const SEC_VIP_N=10,SEC_FAIL=3,SEC_SAFE=7;        // VIP totali · VIP morti tollerati (più di così: sconfitta) · VIP in salvo oltre i quali non escono più ondate
+const SEC_WAVES=2,SEC_WAVES_LATE=3,SEC_VIP_LATE=3,SEC_WAVE_N=9,SEC_WAVE_GAP=8;   // ondate per i primi 2 VIP · ondate dal VIP SEC_VIP_LATE in poi · da quale VIP scatta il numero maggiorato · nemici per ondata · secondi tra un'ondata e l'altra
+const SEC_LEAD=20,SEC_GAP=50,SEC_FIRST=10;       // secondi dalla prima ondata alla partenza del furgone · tra un VIP e il successivo · tra la cattura della zona e il primo ciclo
+const SEC_SPAWN_D=Math.round(1200*SPAWN_K),SEC_ALLY_D=500,SEC_ALLY_N=7,SEC_LEASH=900,SEC_CAP_T=12;   // distanza dei nemici dal meeting · raggio delle guardie alleate · quante · quanto lontano dal meeting inseguono · secondi di cattura
+const SEC_VAN_HP=450,SEC_VAN_V=140*GND_SPD,SEC_VAN_D=1500,SEC_BHP=4;   // furgone: vita, velocità, distanza di partenza · edificio: moltiplicatore della sua vita
+// ---- missione 9: difesa della base (tower defence) ----
+const TD_TIME=900,TD_START_R=400,TD_FIRST=10;     // durata della difesa (s) · distanza a cui un giocatore fa partire il tempo · secondi alla prima ondata
+const TD_BHP=6,TD_TUR_HP=2,TD_TUR_AR=4;            // edificio: moltiplicatore vita · torrette: moltiplicatore vita e corazza minima
+const TD_TUR_D=170,TD_ZONE_R=95,TD_CAP_T=10;        // distanza torretta dal bordo dell'edificio · raggio della zona · secondi per ripristinare la torretta
+const TD_SPAWN_D=Math.round(1300*SPAWN_K),TD_MAX=40;                   // distanza di nascita delle ondate · nemici vivi massimi (protegge le prestazioni)
+const TD_GAP=[30,15],TD_WN=[9,12];                  // [inizio, fine]: secondi tra ondate · nemici per ondata (crescono linearmente nei 15 minuti)
+const TD_NUKE_N=7,TD_NUKE_T=9,TD_NUKE_KILL=1.5;    // esplosioni finali · durata della sequenza (s) · istante in cui i nemici muoiono
+const OBJ_MIN=Math.max(WW,WH)/2;        // l'obiettivo principale di ogni missione sta PIÙ lontano di così dalla partenza (metà del lato più lungo)
+const PLANT_R=1000,PLANT_T=45,KOTH_R=170,KOTH_T=90,KOTH_WAVE=18,KOTH_N=9,KOTH_D=[750,1050].map(d=>Math.round(d*SPAWN_K));   // KOTH_D: distanza di nascita delle ondate dalla zona [min, max]
+const FLEET_N=3,FLEET_GAP=800;            // missione 11: navi della flotta nemica · distanza minima preferita fra due navi (px)
+const NK_T=30,NK_FLASH=4.2,NK_FADE=8,SHIP_R=280;   // nucleare: timer (s), durata del lampo bianco (s), dissolvenza sul velo (s); SHIP_R: raggio di imbarco alla nave
+// ---- deathmatch ----
+const DM_BOTS=8,DM_LIMIT=15,DM_RESPAWN=3;
+// ---- upgrade e caselle del mech ----
+// PER AGGIUNGERNE UNO basta una riga: id (unico), g (gruppo: 'a' tutti, 'g' Grunt, 'x' Air), n (nome), d (descrizione),
+// le proprietà numeriche che poi leggono upMul/upSum in applyLoadout (AGgame.js) e ic (disegno SVG, viewBox -10..10, colore = currentColor).
+// L'ordine in questa lista NON conta: nella selezione compaiono prima le armi (rosso), poi UP_GROUPS nell'ordine indicato.
+const UP_GROUPS=['a','g','x'];                                    // tutti → Grunt → Air
+const UP_COL={a:'#ffffff',g:'#ffd23f',x:'#4aa3ff'},WP_COL='#ff3b3b';   // tutti = bianco, Grunt = giallo, Air = blu, armi = rosso
+const SHIELD_T=20,SHIELD_GRACE=.5,REVIVE_CD=90;    // ricarica di uno scudo (s); grazia anti-multi-hit (s); ricarica della Rianimazione (s)
+const SLOW_W=.25,SLOW_P=.75,SLOW_T=6,SLOW_CD=120;
+// slow motion (riga sopra): velocità del mondo · di chi l'ha attivato · durata (s reali) · ricarica (s reali)
+const STL_A=.3,STL_AIM=4,STL_T=15,STL_CD=60;   // stealth (attivazione manuale): opacità del mech 30% · tempo di mira dell'AI ×4 · durata (s reali) · ricarica (s reali, parte quando l'effetto finisce)
+const SPOT_T=2000,SPOT_GAP=250;   // Radar eyes: durata del cerchio rosso (ms) · ms senza essere disegnato dopo i quali un nemico conta come "appena apparso"
+const ABIL_CD={turret:30,wingman:30,smoke:50};   // ricarica (s) delle abilità attive lanciate dal giocatore
+// ---- ABILITÀ A COPIE: una riga per abilità. La leggono loadout, reset del mech, ricariche, HUD e rete (hello, ldt, snapshot). ----
+// PER AGGIUNGERNE UNA: una riga qui (più l'upgrade in UPGRADES e la funzione che la usa). Nessun altro elenco da aggiornare.
+// id = upgrade nella casella ('u:'+id) · n = campo del giocatore con il numero di copie · up = proprietà dell'upgrade sommata da upSum
+// a = campo del giocatore con le ricariche (una per copia, secondi rimasti; 0 = carica) · max = copie accettate dalla rete
+// cd = ricarica piena (s), per l'anello dell'HUD · col = colore dell'anello
+// own = chi decide la ricarica: 'host' (scudi e rianimazione: dipendono dai danni, li calcola l'host e arrivano con lo snapshot)
+//       'pl' (le usa il giocatore: ogni dispositivo ricarica solo le proprie, non viaggiano in rete)
+// rt = 1: si ricarica in tempo reale (lo slow motion non la rallenta) · hud = disegno speciale dell'anello: 'shield' (pieno quando è pronto), 'stealth' (si svuota mentre l'effetto è attivo)
+const ABIL=[
+ {id:'shield', n:'shn', up:'sh',  a:'shs',    max:4,cd:SHIELD_T,          col:'#0066ff',own:'host',hud:'shield'},
+ {id:'revive', n:'rvn', up:'rv',  a:'revive', max:4,cd:REVIVE_CD,         col:'#ffc400',own:'host'},
+ {id:'turret', n:'turn',up:'tur', a:'turs',   max:4,cd:ABIL_CD.turret,    col:'#3fd05a',own:'pl'},
+ {id:'wingman',n:'wmg', up:'wmg', a:'wmgs',   max:4,cd:ABIL_CD.wingman,   col:'#ffd23f',own:'pl'},
+ {id:'smoke',  n:'smk', up:'smk', a:'smks',   max:4,cd:ABIL_CD.smoke,     col:'#aab8c0',own:'pl'},
+ {id:'stealth',n:'stn', up:'stn', a:'stls',   max:6,cd:STL_CD,            col:'#7fd8ff',own:'pl',rt:1,hud:'stealth'}];
+const ABIL_HOST=ABIL.filter(A=>A.own==='host');   // quelle che viaggiano nello snapshot, in quest'ordine
+const UPGRADES=[
+ // ---- per tutti (bianco) ----
+ {id:'regen',g:'a',n:'Rigenerazione',rgA:1,rgG:2,
+  get d(){return `   Vita: rigenera +${Math.round((this.rgG-1)*100)}% ed anche in Air`},
+  ic:'<rect x="-2.5" y="-8" width="5" height="16" fill="currentColor"/><rect x="-8" y="-2.5" width="16" height="5" fill="currentColor"/>'},
+ {id:'dash',g:'a',n:'Energia',dcm:1,
+  get d(){return `   Energia massima +${Math.round(this.dcm*100)} (per scatto e mischia)`},
+  ic:'<path d="M2,-9 L-5,1 L-0.5,1 L-2,9 L5,-1.5 L0.5,-1.5 Z" fill="currentColor"/>'},   // fulmine: energia
+ {id:'shield',g:'a',n:'Scudo',sh:1,
+  get d(){return `   Grunt e Air: assorbe il primo colpo subito, si ricarica in ${SHIELD_T} s (con più scudi entra il prossimo carico)`},
+  ic:'<circle cx="0" cy="0" r="7" fill="none" stroke="currentColor" stroke-width="4.5"/><circle cx="0" cy="0" r="2.5" fill="currentColor"/>'},   // come l'anello di ricarica pieno dell'HUD
+ {id:'plasma',g:'a',n:'Plasmablade',mel:2,
+  get d(){return `   Grunt e Air: danno della mischia +${Math.round((this.mel-1)*100)}%, arco al ${Math.round(PLASMA_ARC*100)}%. Parare un colpo restituisce l'energia del fendente`},
+  ic:'<path d="M-7,7 L5,-5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M5,-5 L8,-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M-9,3 L-3,9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'},
+ {id:'revive',g:'a',n:'Rianimazione',rv:1,
+  get d(){return `   Torni in piedi al 50% di vita invece di morire. Ricarica ${REVIVE_CD}s (${this.rv} caric${this.rv>1?'he':'a'} per copia)`},
+  ic:'<path d="M0,-8 L0,8 M-8,0 L8,0" stroke="currentColor" stroke-width="3"/><circle cx="0" cy="0" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>'},
+ {id:'pierce',g:'a',n:'Proiettili perforanti',prc:1,dmx:30,
+  get d(){return `   Ogni tua arma perfora oggetti e nemici · +${this.dmx} danni per caricatore (almeno +1 a colpo o a tick) · +${this.prc} al danno minimo a colpo`},
+  ic:'<path d="M-6,-7 V-2.2 M-6,2.2 V7 M-1.5,-7 V-2.2 M-1.5,2.2 V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M-9,0 L2.5,0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5,-2.5 L5.5,-2.5 Q8,-1.8 9.2,0 Q8,1.8 5.5,2.5 L2.5,2.5 Z" fill="currentColor"/>'},
+ {id:'radar',g:'a',n:'Radar eyes',rad:4,rng:1.2,   // rng: gittata delle armi del giocatore ×1,2 per copia (plRng in AGsim.js)
+  get d(){return `   I nemici restano visibili per ${this.rad}s dopo aver perso la visuale (più copie = più secondi), un cerchio rosso evidenzia per ${SPOT_T/1000}s ogni nemico appena apparso · +${Math.round((this.rng-1)*100)}% gittata a tutte le tue armi (si somma con più copie)`},
+  ic:'<path d="M-9,2 Q0,-6 9,2 Q0,10 -9,2 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="0" cy="2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="0" cy="2" r="1.4" fill="currentColor"/><path d="M-4,-5 Q0,-8 4,-5 M-6.5,-7.5 Q0,-12 6.5,-7.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'},   // occhio aperto con onde radar
+ {id:'turret',g:'g',n:'Torretta',tur:1,
+  get d(){return `   Piazza una torretta davanti al mech (${this.tur} per copia). Ricarica ${ABIL_CD.turret}s`},
+  ic:'<g transform="translate(-3.6,0) scale(.38)"><rect x="8" y="-11" width="27" height="6.5" fill="currentColor"/><rect x="8" y="4.5" width="27" height="6.5" fill="currentColor"/><circle cx="0" cy="0" r="14" fill="currentColor" stroke="#111" stroke-width="2.5"/><rect x="-4" y="-6" width="12" height="12" fill="#111" opacity=".7"/></g>'},   // torretta di terra come in gioco: corpo rotondo + 2 canne gemelle
+ {id:'wingman',g:'a',n:'Wingman',wmg:1,
+  get d(){return `   Schiera un mech alleato che ti segue e combatte al tuo fianco. Max 1 attivo per copia. Ricarica ${ABIL_CD.wingman}s`},
+  ic:'<path d="M-9,9 Q-9,2 -3,1 L3,1 Q9,2 9,9 Z" fill="currentColor"/><rect x="-1.8" y="-1" width="3.6" height="3" fill="currentColor"/><circle cx="0" cy="-4" r="4" fill="currentColor"/><path d="M-4.6,-4.5 Q0,-10.5 4.6,-4.5 Z" fill="currentColor"/><rect x="-3" y="-4.2" width="6" height="1.6" rx=".8" fill="#000" opacity=".55"/>'},   // mezzo busto: spalle, collo, testa con elmetto e visiera
+ {id:'smoke',g:'a',n:'Fumogeni',smk:1,
+  get d(){return `   Lancia un fumogeno entro ${SMK_RANGE}px (nuvola di raggio ${SMK_R}px, ${SMK_LIFE}s). Le unità dentro sono visibili solo entro ${SMK_HIDE}px. Ricarica ${ABIL_CD.smoke}s (${this.smk} per copia)`},
+  ic:'<g fill="#a7adb3" stroke="#5f666d" stroke-width="0.8"><circle cx="-4.5" cy="2" r="4"/><circle cx="0" cy="-1.5" r="5.5"/><circle cx="5" cy="1.5" r="4"/><rect x="-8.5" y="1.5" width="17" height="4.5" rx="2.2"/></g><g fill="#a7adb3"><circle cx="-4.5" cy="2" r="3.6"/><circle cx="0" cy="-1.5" r="5.1"/><circle cx="5" cy="1.5" r="3.6"/><rect x="-8.1" y="1.9" width="16.2" height="3.7" rx="1.9"/></g><circle cx="-1.5" cy="-3.5" r="1.8" fill="#d4d8dc"/>'},   // nuvoletta grigia (il secondo gruppo copre i contorni interni, il puntino chiaro fa da riflesso)
+ {id:'slowmo',g:'a',n:'Slow motion',d:`   Per ${SLOW_T} s tutto il gioco scende al ${Math.round(SLOW_W*100)}% della velocità, tu solo al ${Math.round(SLOW_P*100)}%. Ricarica ${SLOW_CD}s`,slw:1,
+  ic:'<circle cx=\"0\" cy=\"0\" r=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path d=\"M0,-4 L0,0 L4,2\" stroke=\"currentColor\" stroke-width=\"1.5\" fill=\"none\"/>'},
+ {id:'stealth',g:'a',n:'Stealth',stn:1,
+  get d(){return `   Si attiva col tasto dello slot: per ${STL_T}s il mech è opaco al ${Math.round(STL_A*100)}%, l'AI impiega ${STL_AIM}× il tempo per mirarti e in deathmatch il tuo nome sparisce. Ricarica ${STL_CD}s dopo l'effetto (${this.stn} per copia)`},
+  ic:'<path d="M-9,0 Q0,-8 9,0 Q0,8 -9,0 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="0" cy="0" r="2.5" fill="currentColor"/><path d="M-8,7 L8,-7" stroke="currentColor" stroke-width="2"/>'},
+ // ---- Grunt (giallo) ----
+ {id:'gspd',g:'g',n:'Agilità Grunt',spd:1.30,
+  get d(){return `   Grunt: velocità +${Math.round((this.spd-1)*100)}%, nessun rallentamento da acqua, collina, fango, neve e pozzanghere; in acqua hai l'effetto stealth`},
+  ic:'<path d="M0,-9 L8,7 L0,3 L-8,7 Z" fill="currentColor"/>'},
+ {id:'grlm',g:'g',n:'Ricarica rapida',rlm:.75,frm:1.2,
+  get d(){return `   Grunt: tempo di ricarica −${Math.round((1-this.rlm)*100)}%, cadenza di fuoco +${Math.round((this.frm-1)*100)}%`},
+  ic:'<rect x="-4" y="-6" width="8" height="11" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M0,-8 A8,8 0 1,0 8,0" fill="none" stroke="currentColor" stroke-width="1.5"/><polygon points="-2,-10 1,-8 -2,-6" fill="currentColor"/>'},
+ {id:'gdr',g:'g',n:'Corazza Grunt',drG:7,
+  get d(){return `   Grunt: −${this.drG} a ogni danno subito`},
+  ic:'<path d="M0,-8 L7,-5 L6,3 L0,9 L-6,3 L-7,-5 Z" fill="currentColor"/>'},
+ // ---- Air (blu) ----
+ {id:'xdr',g:'x',n:'Corazza Air',drA:7,
+  get d(){return `   Air: −${this.drA} a ogni danno subito`},
+  ic:'<path d="M0,-8 L7,-5 L6,3 L0,9 L-6,3 L-7,-5 Z" fill="currentColor"/>'},
+{id:'xagi',g:'x',n:'Agilità Air',agi:1.25,arc:1.7,
+  get d(){return `   Air: velocità di virata e velocità massima +${Math.round((this.agi-1)*100)}%, angolo di tiro +${Math.round((this.arc-1)*100)}%`},
+  ic:'<path d="M0,-9 L8,7 L0,3 L-8,7 Z" fill="currentColor"/>'}];
+// ---- colori ----
+const COLS=[['#d98b2b','#f3c67a'],['#3b82f6','#9cc2ff'],['#65944d','#92bd75'],['#cc0000','#f28b8b'],['#a855f7','#d8b4fe'],['#5a6b7c','#93a5b8'],['#f4f1e8','#e8e2d2'],
+ ['#2a2a2a','#5a5a5a'],   // 7  nero antracite
+ ['#6b4423','#a67c52'],   // 8  marrone
+ ['#ff69b4','#ffc4e1']];  // 9  rosa unicorno
+// palette edifici [bordo, tetto]; dal 6 in poi sono speciali (caserma, centrale, radar, serbatoio, edificio VIP, blocco stradale, muro)
+const BPAL=[['#3f4a55','#566473'],['#4a4440','#655c55'],['#3b4a63','#52698a'],['#4b4a3c','#66654f'],['#34494d','#4b676c'],['#4a4254','#655a73'],
+ ['#5a2323','#8a3a3a'],['#5b5b2a','#8d8d3f'],['#3d5566','#5f86a0'],['#2f5a52','#4f8f82'],['#2f5a52','#5aa595'],['#6b4a12','#c28a1c'],['#3f3d38','#77736a']];
+const PAL_BAR=6,PAL_PLANT=7,PAL_RADAR=8,PAL_TANK=9,PAL_VIP=10,PAL_BLK=11,PAL_WALL=12;
+const BLD_MIN=64;   // lato minore minimo (px) di un edificio normale: più piccolo di così non viene costruito (muri, container, silos ecc. esclusi)
+const ALLEY=PR_PUSH*2;   // vicolo minimo (px) fra due edifici separati della stessa formazione: esattamente la larghezza del Grunt (2×PR_PUSH), che ci passa senza toccare i muri
+// tonalità di ogni tipo di sito: [tinta min, max, saturazione min, max, luminosità del tetto min, max]; il piazzale ne prende una versione spenta e scura
+//   c base militare · n silos missilistici · a aeroporto · i industria · k centrale nucleare · y cantiere spaziale · t centro direzionale · p porto · f fattoria · v villa · q cava · s arena
+const SITE_TONE={c:[74,90,22,32,24,32],n:[56,72,20,30,30,38],a:[200,215,10,18,38,48],i:[16,30,30,42,30,40],k:[158,176,12,22,46,58],y:[212,232,26,38,30,42],
+ t:[258,284,14,24,36,48],p:[188,204,22,32,32,42],f:[4,16,40,52,32,42],v:[36,46,30,42,60,70],q:[32,44,26,36,38,48],s:[30,46,8,18,52,64]};
+// palette in più (13..28): 13..16 cupe da città cyberpunk, poi terracotta, blu, oliva, ocra, prugna, grafite, cemento, verde, ruggine, petrolio, crema, viola
+BPAL.push(['#2b2f3a','#3d4454'],['#2a2538','#41395a'],['#1f3a3f','#2f5c63'],['#3a2a2f','#5a3f48'],
+ // nuove, indici 17..28: terracotta, blu, oliva, ocra, prugna, grafite, cemento, verde, ruggine, petrolio, crema, viola
+ ['#6b3f2a','#9a5b3c'],['#2e4a6b','#4a79a8'],['#5a6b2e','#86a047'],['#7a6a3a','#b39d55'],['#6b2e4a','#a14d79'],['#3a3a3a','#5c5c5c'],
+ ['#8a8f96','#b4b9c0'],['#2f5a3a','#4f8f63'],['#7a3a2a','#c0583a'],['#2a4a52','#3f7f8c'],['#a8a08a','#d2c9ae'],['#5a4a7a','#8a77b8']);
+const CONT_COL=['#c0392b','#2e86c1','#d4ac0d','#27ae60','#7f8c8d','#e67e22','#8e44ad','#16a085','#d9dde0','#34495e'];   // colori dei container
+// colore del terreno per quota: bassa, media, alta
+const LVL_COL=['#4c6b40','#5d7a45','#7c8c55'];
+// colore del terreno per natura (M.bio): prato, bosco, roccia, sabbia, cemento, campi
+const GROUND_COL=['#4f6a3f','#2b4529','#6e685c','#a8956a','#474b54','#6c7a3c'];
+const SFX_LIST={melee:'sfx/sfx-melee.mp3',hit:'sfx/tennis_ball_2.wav',hurt:'sfx/snap.wav',toAir:'sfx/sfx-airdrop.mp3',toGrunt:'sfx/sfx-cards4.mp3',move:'sfx/foley_creak_1.wav',
+ boom:'sfx/sfx-explosion.mp3',crash:'sfx/sfx-crollo.mp3',enemy:'sfx/sfx-uzi.mp3',reload:'sfx/sword_drop.wav',nuke:'sfx/sfx-boom.mp3',
+ mvWalker:'sfx/foley_creak_1.wav',mvJet:'sfx/sfx-airdrop.mp3',mvTank:'sfx/tracks.mp3',mvVeh:'sfx/vehicle.mp3',crunch:'sfx/crunch_splat.wav',
+ burn:'sfx/burning.mp3'};   // veicoli: movimento del Colosso (passi del mech), del jet, del carro, degli altri mezzi · albero abbattuto da un mezzo · burn = fuoco del lanciafiamme (loop finché qualcosa brucia, aiMoveSnd in AGveh.js)
+const VEH_WALK_VOL=3;   // Colosso: volume dei passi rispetto a quelli del Grunt (stesso file)
+
